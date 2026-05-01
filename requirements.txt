@@ -1,0 +1,5 @@
+﻿fastapi>=0.115.0
+uvicorn>=0.30.0
+psycopg[binary]>=3.2.0
+# Optional for live model calls
+openai>=1.35.0

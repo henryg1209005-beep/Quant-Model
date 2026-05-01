@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local runtime artifacts
+data/
+.env
+.env.append.tmp
+data/*.log
+data/*.out
+data/*.err
+data/server*.log
+data/restart*.log
+server_run.log
+server_crash.log
+
+# Local editor/system noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+data/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.venv/
+.env
+server_run.log
+server_crash.log

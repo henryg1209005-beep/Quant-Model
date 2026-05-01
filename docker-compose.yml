@@ -1,0 +1,64 @@
+﻿version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: trading-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trading
+      POSTGRES_PASSWORD: trading
+      POSTGRES_DB: trading
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trading -d trading"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    container_name: trading-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://trading:trading@db:5432/trading
+      APP_DB_PATH: data/trading_app.db
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DATA_PROVIDER: ${DATA_PROVIDER:-mock}
+      EXECUTION_PROVIDER: ${EXECUTION_PROVIDER:-mock}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      SYMBOL: ${SYMBOL:-SPY}
+      ALPACA_KEY_ID: ${ALPACA_KEY_ID:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    command: ["python", "-m", "ai_trading_engine.server"]
+
+  worker:
+    build: .
+    container_name: trading-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://trading:trading@db:5432/trading
+      APP_DB_PATH: data/trading_app.db
+      DATA_PROVIDER: ${DATA_PROVIDER:-mock}
+      EXECUTION_PROVIDER: ${EXECUTION_PROVIDER:-mock}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      SYMBOL: ${SYMBOL:-SPY}
+      CYCLE_SECONDS: ${CYCLE_SECONDS:-30}
+      ALPACA_KEY_ID: ${ALPACA_KEY_ID:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: ["python", "-m", "ai_trading_engine.worker"]
+
+volumes:
+  pgdata:
