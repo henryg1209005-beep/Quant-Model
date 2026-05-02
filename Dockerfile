@@ -11,4 +11,6 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE 8000
 
-CMD python -m uvicorn ai_trading_engine.api:app --app-dir src --host 0.0.0.0 --port ${PORT:-8000}
+RUN chmod +x /app/docker/entrypoint.sh
+
+CMD ["/app/docker/entrypoint.sh"]
