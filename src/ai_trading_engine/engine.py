@@ -114,6 +114,15 @@ class TradingEngine:
         confidence = float(conf_match.group(1)) if conf_match else 0.0
         return regime, confidence
 
+    @staticmethod
+    def _exc_brief(exc: Exception, max_len: int = 180) -> str:
+        msg = str(exc).replace("\n", " ").replace("\r", " ").strip()
+        if not msg:
+            return type(exc).__name__
+        if len(msg) > max_len:
+            msg = msg[:max_len].rstrip() + "..."
+        return f"{type(exc).__name__}:{msg}"
+
     def _build_data_adapter(self):
         if self.settings.data_provider == "alpaca":
             return AlpacaMarketDataAdapter(
@@ -843,12 +852,12 @@ class TradingEngine:
                         llm_routing["active_tier"] = "secondary"
                         llm_routing["secondary_invoked"] = True
                         llm_routing["secondary_reason"] = "primary_exception_failover"
-                        llm_routing["state_gate_reason"] = f"primary_exception:{type(primary_exc).__name__}"
+                        llm_routing["state_gate_reason"] = f"primary_exception:{self._exc_brief(primary_exc)}"
                         failover_succeeded = True
                     except Exception as secondary_exc:
                         llm_routing["secondary_invoked"] = True
                         llm_routing["secondary_reason"] = (
-                            f"primary_exception_failover_failed:{type(primary_exc).__name__}->{type(secondary_exc).__name__}"
+                            f"primary_exception_failover_failed:{self._exc_brief(primary_exc)}->{self._exc_brief(secondary_exc)}"
                         )
                 if not failover_succeeded:
                     if self._last_llm_decision is not None:
@@ -856,7 +865,7 @@ class TradingEngine:
                         raw = self._last_llm_raw
                         decision.reasoning = f"{decision.reasoning} [fallback:last_valid_decision]".strip()
                         llm_routing["state_gate_used_cache"] = True
-                        llm_routing["state_gate_reason"] = f"primary_exception_fallback_cache:{type(primary_exc).__name__}"
+                        llm_routing["state_gate_reason"] = f"primary_exception_fallback_cache:{self._exc_brief(primary_exc)}"
                     else:
                         decision = _hold_decision("LLM unavailable; fallback deterministic hold.")
                         decision.forecast_direction = "LONG" if self._get_dim_value(context, "Trend", 0.0) >= 0 else "SHORT"
@@ -864,7 +873,7 @@ class TradingEngine:
                         decision.forecast_horizon_minutes = 15
                         raw = ""
                         llm_routing["state_gate_used_cache"] = True
-                        llm_routing["state_gate_reason"] = f"llm_unavailable_deterministic_hold:{type(primary_exc).__name__}"
+                        llm_routing["state_gate_reason"] = f"llm_unavailable_deterministic_hold:{self._exc_brief(primary_exc)}"
         escalate, reason = self._should_escalate_to_secondary(decision)
         if (not llm_routing["state_gate_used_cache"]) and escalate and self.llm_secondary is not None:
             try:
@@ -885,7 +894,7 @@ class TradingEngine:
                 )
             except Exception as exc:
                 llm_routing["secondary_invoked"] = True
-                llm_routing["secondary_reason"] = f"{reason}; fallback_primary={exc}"
+                llm_routing["secondary_reason"] = f"{reason}; fallback_primary={self._exc_brief(exc)}"
         llm_routing["provider_health"] = self.llm_provider_health_snapshot()
         candidate_trade = decision.action == "trade" and decision.direction is not None
         challenger_trade = False
