@@ -828,21 +828,43 @@ class TradingEngine:
                 self._last_llm_raw = raw_primary
                 self._last_llm_decision = self._clone_decision(decision)
                 llm_routing["state_gate_reason"] = skip_reason
-            except Exception:
-                if self._last_llm_decision is not None:
-                    decision = self._clone_decision(self._last_llm_decision)
-                    raw = self._last_llm_raw
-                    decision.reasoning = f"{decision.reasoning} [fallback:last_valid_decision]".strip()
-                    llm_routing["state_gate_used_cache"] = True
-                    llm_routing["state_gate_reason"] = "parse_failed_fallback_last_valid"
-                else:
-                    decision = _hold_decision("LLM unavailable; fallback deterministic hold.")
-                    decision.forecast_direction = "LONG" if self._get_dim_value(context, "Trend", 0.0) >= 0 else "SHORT"
-                    decision.forecast_confidence = 0.5
-                    decision.forecast_horizon_minutes = 15
-                    raw = ""
-                    llm_routing["state_gate_used_cache"] = True
-                    llm_routing["state_gate_reason"] = "llm_unavailable_deterministic_hold"
+            except Exception as primary_exc:
+                failover_succeeded = False
+                if self.llm_secondary is not None:
+                    try:
+                        raw_secondary, decision = self._decide_with_retries(
+                            self.llm_secondary, llm_context, provider=secondary_provider
+                        )
+                        raw = raw_secondary
+                        self._last_llm_signature = state_signature
+                        self._last_llm_call_at = now_utc
+                        self._last_llm_raw = raw_secondary
+                        self._last_llm_decision = self._clone_decision(decision)
+                        llm_routing["active_tier"] = "secondary"
+                        llm_routing["secondary_invoked"] = True
+                        llm_routing["secondary_reason"] = "primary_exception_failover"
+                        llm_routing["state_gate_reason"] = f"primary_exception:{type(primary_exc).__name__}"
+                        failover_succeeded = True
+                    except Exception as secondary_exc:
+                        llm_routing["secondary_invoked"] = True
+                        llm_routing["secondary_reason"] = (
+                            f"primary_exception_failover_failed:{type(primary_exc).__name__}->{type(secondary_exc).__name__}"
+                        )
+                if not failover_succeeded:
+                    if self._last_llm_decision is not None:
+                        decision = self._clone_decision(self._last_llm_decision)
+                        raw = self._last_llm_raw
+                        decision.reasoning = f"{decision.reasoning} [fallback:last_valid_decision]".strip()
+                        llm_routing["state_gate_used_cache"] = True
+                        llm_routing["state_gate_reason"] = f"primary_exception_fallback_cache:{type(primary_exc).__name__}"
+                    else:
+                        decision = _hold_decision("LLM unavailable; fallback deterministic hold.")
+                        decision.forecast_direction = "LONG" if self._get_dim_value(context, "Trend", 0.0) >= 0 else "SHORT"
+                        decision.forecast_confidence = 0.5
+                        decision.forecast_horizon_minutes = 15
+                        raw = ""
+                        llm_routing["state_gate_used_cache"] = True
+                        llm_routing["state_gate_reason"] = f"llm_unavailable_deterministic_hold:{type(primary_exc).__name__}"
         escalate, reason = self._should_escalate_to_secondary(decision)
         if (not llm_routing["state_gate_used_cache"]) and escalate and self.llm_secondary is not None:
             try:
