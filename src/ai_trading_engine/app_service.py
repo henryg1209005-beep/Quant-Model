@@ -3022,9 +3022,26 @@ class TradingAppService:
                 decision.forecast_confidence = max(0.5, float(decision.confidence or 0.0))
             if int(decision.forecast_horizon_minutes or 0) <= 0:
                 decision.forecast_horizon_minutes = 15
-        self._persistence.save_cycle(cycle, metadata=metadata)
-        sample_quality = dict((cycle.metadata or {}).get("sample_quality") or {})
+
+        # Reconcile sample-quality forecast flags after fallback normalization so
+        # persisted flags reflect the final stored forecast fields.
+        forecast_ok = (
+            decision.forecast_direction in {"LONG", "SHORT"}
+            and float(decision.forecast_confidence or 0.0) > 0.0
+            and int(decision.forecast_horizon_minutes or 0) > 0
+        )
+        cycle.metadata = dict(cycle.metadata or {})
+        sample_quality = dict(cycle.metadata.get("sample_quality") or {})
         quality_flags = dict(sample_quality.get("flags") or {})
+        quality_flags["missing_forecast"] = not forecast_ok
+        hard_fail_flags = dict(sample_quality.get("hard_fail_flags") or {})
+        hard_fail_flags["missing_forecast"] = bool(quality_flags["missing_forecast"])
+        sample_quality["flags"] = quality_flags
+        sample_quality["hard_fail_flags"] = hard_fail_flags
+        sample_quality["good"] = not any(bool(v) for v in hard_fail_flags.values())
+        cycle.metadata["sample_quality"] = sample_quality
+
+        self._persistence.save_cycle(cycle, metadata=metadata)
         if bool(quality_flags.get("quote_stale", False)):
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "quote_stale"}
