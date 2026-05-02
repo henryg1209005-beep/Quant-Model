@@ -7,7 +7,7 @@ SEED_PATH="/app/seed/trading_app.db"
 DB_DIR="$(dirname "$DB_PATH")"
 mkdir -p "$DB_DIR"
 
-if [ ! -f "$DB_PATH" ] && [ -f "$SEED_PATH" ]; then
+if [ -f "$SEED_PATH" ] && { [ ! -f "$DB_PATH" ] || [ ! -s "$DB_PATH" ]; }; then
   cp "$SEED_PATH" "$DB_PATH"
   echo "Seeded database at $DB_PATH from $SEED_PATH"
 fi
