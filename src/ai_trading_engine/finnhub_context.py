@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -122,6 +123,17 @@ SYMBOL_KEYWORDS = {
     "META": {"meta", "facebook", "instagram", "whatsapp", "reels", "metaverse"},
 }
 
+HIGH_QUALITY_SOURCES = {"reuters", "bloomberg", "cnbc", "financial times", "wsj", "wall street journal"}
+LOW_QUALITY_SOURCES = {"benzinga", "seeking alpha"}
+
+EVENT_BUCKET_KEYWORDS: dict[str, set[str]] = {
+    "macro_policy": {"fed", "fomc", "powell", "rates", "inflation", "cpi", "pce", "treasury", "yield", "yields"},
+    "macro_growth": {"jobs", "payroll", "unemployment", "gdp"},
+    "geopolitics": {"war", "missile", "sanction", "tariff", "hormuz"},
+    "earnings": {"earnings", "guidance", "revenue", "profit", "outlook"},
+    "corporate_action": {"merger", "acquisition", "lawsuit", "antitrust", "sec", "recall", "layoffs", "bankruptcy"},
+}
+
 
 @dataclass(frozen=True)
 class FinnhubContextSnapshot:
@@ -133,6 +145,8 @@ class FinnhubContextSnapshot:
     earnings_risk: str
     news_sentiment_label: str
     news_sentiment_score: float
+    news_confidence: float
+    cleaned_summary: dict[str, Any] = field(default_factory=dict)
     market_headlines: list[dict[str, Any]] = field(default_factory=list)
     company_headlines: list[dict[str, Any]] = field(default_factory=list)
     earnings: list[dict[str, Any]] = field(default_factory=list)
@@ -221,6 +235,7 @@ def _headline(item: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError, OSError):
         published = ""
     return {
+        "id": str(item.get("id") or ""),
         "published_at": published,
         "source": str(item.get("source") or ""),
         "headline": str(item.get("headline") or "")[:240],
@@ -230,6 +245,36 @@ def _headline(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _published_dt(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _headline_key(h: dict[str, Any]) -> str:
+    parts = [
+        str(h.get("id") or "").strip().lower(),
+        str(h.get("url") or "").strip().lower(),
+        _canonical_headline(str(h.get("headline") or "")),
+    ]
+    payload = "|".join(parts).encode("utf-8", errors="ignore")
+    return hashlib.sha1(payload).hexdigest()
+
+
+def _event_bucket(headline: str, summary: str) -> str:
+    text = _norm_text(f"{headline} {summary}")
+    for bucket, keys in EVENT_BUCKET_KEYWORDS.items():
+        if any(k in text for k in keys):
+            return bucket
+    return "general"
+
+
 def _filter_headlines(
     items: list[dict[str, Any]],
     *,
@@ -237,18 +282,28 @@ def _filter_headlines(
     max_headlines: int,
     min_score: float,
     market: bool,
+    max_age_hours: float,
 ) -> list[dict[str, Any]]:
     ranked: list[tuple[float, str, dict[str, Any]]] = []
     seen: set[str] = set()
+    now = _now()
     for raw in items:
         headline = _headline(raw)
         title = str(headline.get("headline") or "")
         if not title:
             continue
-        canonical = _canonical_headline(title)
-        if not canonical or canonical in seen:
+        key = _headline_key(headline)
+        if key in seen:
             continue
-        seen.add(canonical)
+        seen.add(key)
+        published_dt = _published_dt(str(headline.get("published_at") or ""))
+        if published_dt is not None:
+            age_h = max(0.0, (now - published_dt).total_seconds() / 3600.0)
+            if age_h > float(max_age_hours):
+                continue
+        source = str(headline.get("source") or "").strip().lower()
+        if source in LOW_QUALITY_SOURCES:
+            continue
         if not market and symbol in ETF_SYMBOLS:
             related = _norm_text(str(headline.get("related") or ""))
             title_text = _norm_text(title)
@@ -268,6 +323,8 @@ def _filter_headlines(
         )
         if score < min_score:
             continue
+        if source in HIGH_QUALITY_SOURCES:
+            score += 0.4
         headline["relevance_score"] = round(score, 2)
         sentiment_score, sentiment_terms = _headline_sentiment(
             title,
@@ -276,6 +333,8 @@ def _filter_headlines(
         headline["sentiment_score"] = round(sentiment_score, 3)
         headline["sentiment_label"] = _sentiment_label(sentiment_score)
         headline["sentiment_terms"] = sentiment_terms
+        headline["event_bucket"] = _event_bucket(title, str(headline.get("summary") or ""))
+        headline["dedup_key"] = key
         ranked.append((score, str(headline.get("published_at") or ""), headline))
     ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
     return [row[2] for row in ranked[:max_headlines]]
@@ -314,6 +373,7 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
             earnings_risk="disabled",
             news_sentiment_label="neutral",
             news_sentiment_score=0.0,
+            news_confidence=0.0,
         )
     if not settings.finnhub_api_key:
         return FinnhubContextSnapshot(
@@ -325,12 +385,14 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
             earnings_risk="unavailable",
             news_sentiment_label="neutral",
             news_sentiment_score=0.0,
+            news_confidence=0.0,
             notes="FINNHUB_API_KEY is not configured.",
         )
 
     max_headlines = max(1, min(10, int(settings.finnhub_news_max_headlines)))
     min_score = max(0.0, float(settings.finnhub_news_min_score))
     timeout = max(1, int(settings.finnhub_request_timeout_seconds))
+    max_age_hours = max(2.0, float(max(1, int(settings.finnhub_news_lookback_days))) * 24.0)
     today = now.date()
     news_from = today - timedelta(days=max(0, min(14, int(settings.finnhub_news_lookback_days))))
     earnings_to = today + timedelta(days=max(1, min(60, int(settings.finnhub_earnings_lookahead_days))))
@@ -352,6 +414,7 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
                 max_headlines=max_headlines,
                 min_score=min_score,
                 market=True,
+                max_age_hours=max_age_hours,
             )
     except Exception as exc:
         notes.append(f"market_news_error={exc}")
@@ -374,6 +437,7 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
                 max_headlines=max_headlines,
                 min_score=min_score,
                 market=False,
+                max_age_hours=max_age_hours,
             )
     except Exception as exc:
         notes.append(f"company_news_error={exc}")
@@ -420,6 +484,24 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
     else:
         earnings_risk = "clear"
     sentiment_label, sentiment_score = _aggregate_sentiment([*company_headlines, *market_headlines])
+    kept = [*company_headlines, *market_headlines]
+    if kept:
+        conf = sum(float(h.get("relevance_score") or 0.0) for h in kept) / float(max(1, len(kept)))
+        conf = min(1.0, conf / 4.0)
+    else:
+        conf = 0.0
+    bucket_counts: dict[str, int] = {}
+    for h in kept:
+        b = str(h.get("event_bucket") or "general")
+        bucket_counts[b] = int(bucket_counts.get(b, 0)) + 1
+    cleaned_summary = {
+        "kept_headlines": int(len(kept)),
+        "company_kept": int(len(company_headlines)),
+        "market_kept": int(len(market_headlines)),
+        "max_age_hours": float(max_age_hours),
+        "event_buckets": bucket_counts,
+        "high_quality_sources_used": sorted({str(h.get("source") or "").lower() for h in kept if str(h.get("source") or "").lower() in HIGH_QUALITY_SOURCES}),
+    }
 
     return FinnhubContextSnapshot(
         timestamp=now.isoformat(),
@@ -430,6 +512,8 @@ def load_finnhub_context(settings: Settings, symbol: str) -> FinnhubContextSnaps
         earnings_risk=earnings_risk,
         news_sentiment_label=sentiment_label,
         news_sentiment_score=sentiment_score,
+        news_confidence=round(conf, 3),
+        cleaned_summary=cleaned_summary,
         market_headlines=market_headlines,
         company_headlines=company_headlines,
         earnings=earnings[:10],
@@ -457,6 +541,7 @@ def render_finnhub_context(snapshot: FinnhubContextSnapshot) -> str:
         f"News risk: {snapshot.news_risk}\n"
         f"Earnings risk: {snapshot.earnings_risk}\n"
         f"Headline sentiment: {snapshot.news_sentiment_label} ({snapshot.news_sentiment_score:.3f})\n"
+        f"News confidence: {snapshot.news_confidence:.3f}\n"
         f"Market headlines:\n{market}\n"
         f"Company headlines:\n{company}\n"
         f"Earnings:\n{earnings}\n"
