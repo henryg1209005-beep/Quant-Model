@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import unittest
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 import uuid
@@ -63,6 +64,33 @@ class TestHardening(unittest.TestCase):
             self.assertEqual(cycle.decision.action, "hold")
             self.assertIn("Trading kill switch enabled", cycle.decision.reasoning)
             self.assertEqual((cycle.metadata.get("kill_switch") or {}).get("reason"), "maintenance")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_cost_guard_tolerates_non_numeric_call_counts(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(
+                automation_cost_guard_enabled=True,
+                app_db_path=str(tmp / "app.db"),
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            now = datetime.now(tz=timezone.utc).isoformat()
+            bad_row = {
+                "timestamp": now,
+                "metadata": {
+                    "llm_routing": {
+                        "primary_call_count": "not-a-number",
+                        "secondary_call_count": "1.0",
+                    }
+                },
+            }
+            with patch.object(service._persistence, "list_data_samples", return_value=[bad_row]):
+                guard = service._evaluate_cost_guard(force=True)
+            metrics = dict(guard.get("metrics") or {})
+            self.assertGreaterEqual(int(metrics.get("estimated_primary_calls", 0) or 0), 0)
+            self.assertGreaterEqual(int(metrics.get("estimated_secondary_calls", 0) or 0), 0)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

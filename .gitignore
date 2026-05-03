@@ -13,6 +13,7 @@ data/server*.log
 data/restart*.log
 server_run.log
 server_crash.log
+seed/trading_app.db
 
 # Local editor/system noise
 .DS_Store

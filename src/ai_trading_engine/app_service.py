@@ -982,6 +982,13 @@ class TradingAppService:
         }
 
     def _evaluate_cost_guard(self, *, force: bool = False) -> dict[str, Any]:
+        def _to_non_negative_int(value: Any) -> int:
+            try:
+                n = int(float(value))
+            except Exception:
+                return 0
+            return max(0, n)
+
         now = datetime.now(tz=timezone.utc)
         if not bool(self._settings.automation_cost_guard_enabled):
             self._cost_guard_state = {
@@ -1023,8 +1030,8 @@ class TradingAppService:
             lr = dict(md.get("llm_routing") or {})
             if bool(lr):
                 if "primary_call_count" in lr or "secondary_call_count" in lr:
-                    primary_calls += int(lr.get("primary_call_count", 0) or 0)
-                    secondary_calls += int(lr.get("secondary_call_count", 0) or 0)
+                    primary_calls += _to_non_negative_int(lr.get("primary_call_count", 0))
+                    secondary_calls += _to_non_negative_int(lr.get("secondary_call_count", 0))
                 else:
                     if not bool(lr.get("state_gate_used_cache", False)):
                         primary_calls += 1
