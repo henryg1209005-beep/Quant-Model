@@ -2113,6 +2113,11 @@ def api_go_live_gate() -> dict:
     return {"go_live_gate": service.go_live_gate_snapshot()}
 
 
+@app.get("/api/kill-switch")
+def api_kill_switch() -> dict:
+    return {"kill_switch": service.kill_switch_snapshot()}
+
+
 @app.get("/api/audit")
 def api_audit(limit: int = Query(default=50, ge=1, le=500)) -> dict:
     return {"items": service.audit_events(limit)}

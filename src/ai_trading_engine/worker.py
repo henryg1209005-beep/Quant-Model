@@ -11,6 +11,10 @@ def main() -> None:
     settings = load_settings()
     persistence = Persistence(settings.app_db_path, database_url=settings.database_url)
     service = TradingAppService(settings, persistence)
+    kill = service.kill_switch_snapshot()
+    if kill.get("enabled"):
+        print(f"worker start blocked: trading kill switch enabled ({kill.get('reason')})")
+        return
     gate = service.go_live_gate_snapshot()
     if gate.get("blocked_autonomous_live"):
         print(f"worker start blocked: {gate.get('reason', 'go_live_gate_failed')}")

@@ -65,6 +65,7 @@ class TradingEngine:
         self.data_adapter = self._build_data_adapter()
         self.bar_builder = BarBuilder(self.data_adapter)
         self.execution = self._build_execution_engine()
+        self._startup_warnings: list[str] = []
         self.llm = self._build_llm_client()
         self.llm_secondary = self._build_secondary_llm_client()
         self._last_llm_signature: dict[str, Any] | None = None
@@ -167,21 +168,25 @@ class TradingEngine:
         if not bool(self.settings.llm_two_tier_enabled):
             return None
         provider = str(self.settings.llm_two_tier_secondary_provider or "").strip().lower()
-        if provider == "gemini":
-            model = str(self.settings.gemini_secondary_model or "").strip() or self.settings.gemini_model
-            return GeminiLlmClient(
-                model,
-                temperature=self.settings.gemini_temperature,
-                timeout_seconds=self.settings.gemini_timeout_seconds,
-                max_output_tokens=self.settings.llm_max_output_tokens,
-            )
-        if provider == "openai":
-            return OpenAiLlmClient(
-                self.settings.openai_model,
-                reasoning_effort=self.settings.openai_reasoning_effort,
-                temperature=self.settings.openai_temperature,
-                max_output_tokens=self.settings.llm_max_output_tokens,
-            )
+        try:
+            if provider == "gemini":
+                model = str(self.settings.gemini_secondary_model or "").strip() or self.settings.gemini_model
+                return GeminiLlmClient(
+                    model,
+                    temperature=self.settings.gemini_temperature,
+                    timeout_seconds=self.settings.gemini_timeout_seconds,
+                    max_output_tokens=self.settings.llm_max_output_tokens,
+                )
+            if provider == "openai":
+                return OpenAiLlmClient(
+                    self.settings.openai_model,
+                    reasoning_effort=self.settings.openai_reasoning_effort,
+                    temperature=self.settings.openai_temperature,
+                    max_output_tokens=self.settings.llm_max_output_tokens,
+                )
+        except RuntimeError as exc:
+            self._startup_warnings.append(f"secondary_llm_disabled:{provider}:{self._exc_brief(exc)}")
+            return None
         return None
 
     def _should_escalate_to_secondary(self, decision: AiDecision) -> tuple[bool, str]:
@@ -290,6 +295,9 @@ class TradingEngine:
                 ),
             }
         return out
+
+    def startup_warnings(self) -> list[str]:
+        return list(self._startup_warnings)
 
     def force_primary_provider(self, provider: str | None, *, cooldown_seconds: int = 0) -> None:
         p = (provider or "").strip().lower()

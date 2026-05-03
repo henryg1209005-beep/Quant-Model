@@ -135,6 +135,8 @@ class WorkerStatus:
     last_note: str
     last_error: str | None
     model_monitoring: dict[str, Any] | None = None
+    kill_switch: dict[str, Any] | None = None
+    startup_warnings: list[str] | None = None
 
 
 @dataclass
@@ -459,6 +461,14 @@ class TradingAppService:
             decision=decision,
             note=note or reason,
         )
+
+    def kill_switch_snapshot(self) -> dict[str, Any]:
+        return {
+            "enabled": bool(self._settings.trading_kill_switch_enabled),
+            "reason": str(self._settings.trading_kill_switch_reason or "manual_kill_switch"),
+            "blocks_worker_start": True,
+            "blocks_run_once": True,
+        }
 
     def _ensure_position_safety(self) -> tuple[bool, str]:
         pos = self._engine.account.open_position
@@ -3166,6 +3176,23 @@ class TradingAppService:
                     "gate": self.go_live_gate_snapshot(),
                 }
             gate = self.go_live_gate_snapshot()
+            kill = self.kill_switch_snapshot()
+            if bool(kill.get("enabled", False)):
+                self._last_note = "worker start blocked by trading kill switch"
+                return {
+                    "started": False,
+                    "blocked": True,
+                    "reason": "trading_kill_switch_enabled",
+                    "status": {
+                        "running": False,
+                        "cycles_completed": self._cycles_completed,
+                        "last_cycle_at": self._last_cycle_at,
+                        "last_note": self._last_note,
+                        "last_error": self._last_error,
+                    },
+                    "gate": gate,
+                    "kill_switch": kill,
+                }
             if gate.get("blocked_autonomous_live"):
                 self._last_note = "worker start blocked by go-live gate"
                 return {
@@ -3214,6 +3241,24 @@ class TradingAppService:
 
     def run_cycle_once(self) -> CycleResult:
         self._rollover_daily_state_if_needed()
+        kill = self.kill_switch_snapshot()
+        if bool(kill.get("enabled", False)):
+            cycle = self._build_guard_cycle(
+                reason=f"Trading kill switch enabled: {kill.get('reason')}.",
+                note="Guard hold: trading kill switch",
+            )
+            with self._lock:
+                self._cycles_completed += 1
+                self._last_cycle_at = cycle.timestamp.isoformat()
+                self._last_note = cycle.note
+                self._last_error = None
+            metadata = self._decision_metadata()
+            cycle.metadata = dict(cycle.metadata or {})
+            cycle.metadata["kill_switch"] = kill
+            self._persist_cycle_and_sample(cycle, metadata=metadata, symbol=str(metadata.get('symbol') or self._settings.symbol))
+            self._persistence.save_account(self._engine.account)
+            self._notify("trading_kill_switch_hold", {"kill_switch": kill, "metadata": metadata})
+            return cycle
         synced = self._sync_account_from_broker(force_baseline=False, record_closures=True)
         pos = self._engine.account.open_position
         stale_sync_limit = max(10, int(self._settings.broker_sync_stale_seconds))
@@ -3515,6 +3560,8 @@ class TradingAppService:
                 last_note=self._last_note,
                 last_error=self._last_error,
                 model_monitoring=monitor,
+                kill_switch=self.kill_switch_snapshot(),
+                startup_warnings=self._engine.startup_warnings(),
             )
 
     def account(self) -> dict[str, Any]:

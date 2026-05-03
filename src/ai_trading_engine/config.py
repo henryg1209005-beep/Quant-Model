@@ -174,6 +174,8 @@ class Settings:
     risk_per_trade_usd: float
     ev_min_ticks: float
     trade_blocked_symbols: tuple[str, ...]
+    trading_kill_switch_enabled: bool
+    trading_kill_switch_reason: str
     signed_bps_kill_enabled: bool
     signed_bps_kill_threshold: float
     signed_bps_kill_min_labels: int
@@ -455,6 +457,8 @@ DEFAULT_SETTINGS = Settings(
     risk_per_trade_usd=_get_float("RISK_PER_TRADE_USD", 75.0),
     ev_min_ticks=_get_float("EV_MIN_TICKS", 0.2),
     trade_blocked_symbols=_get_csv("TRADE_BLOCKED_SYMBOLS", ""),
+    trading_kill_switch_enabled=_get_bool("TRADING_KILL_SWITCH_ENABLED", False),
+    trading_kill_switch_reason=os.getenv("TRADING_KILL_SWITCH_REASON", "manual_kill_switch"),
     signed_bps_kill_enabled=_get_bool("SIGNED_BPS_KILL_ENABLED", True),
     signed_bps_kill_threshold=_get_float("SIGNED_BPS_KILL_THRESHOLD", -5.0),
     signed_bps_kill_min_labels=_get_int("SIGNED_BPS_KILL_MIN_LABELS", 100),
