@@ -54,16 +54,17 @@ class TestHardening(unittest.TestCase):
                 app_db_path=str(tmp / "app.db"),
             )
             service = TradingAppService(settings, Persistence(settings.app_db_path))
+            monday_utc = datetime(2026, 5, 4, 14, 0, tzinfo=timezone.utc)
+            with patch.object(service, "_now_utc", return_value=monday_utc):
+                started = service.start_with_guard()
+                self.assertFalse(started["started"])
+                self.assertTrue(started["blocked"])
+                self.assertEqual(started["reason"], "trading_kill_switch_enabled")
 
-            started = service.start_with_guard()
-            self.assertFalse(started["started"])
-            self.assertTrue(started["blocked"])
-            self.assertEqual(started["reason"], "trading_kill_switch_enabled")
-
-            cycle = service.run_cycle_once()
-            self.assertEqual(cycle.decision.action, "hold")
-            self.assertIn("Trading kill switch enabled", cycle.decision.reasoning)
-            self.assertEqual((cycle.metadata.get("kill_switch") or {}).get("reason"), "maintenance")
+                cycle = service.run_cycle_once()
+                self.assertEqual(cycle.decision.action, "hold")
+                self.assertIn("Trading kill switch enabled", cycle.decision.reasoning)
+                self.assertEqual((cycle.metadata.get("kill_switch") or {}).get("reason"), "maintenance")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -91,6 +92,26 @@ class TestHardening(unittest.TestCase):
             metrics = dict(guard.get("metrics") or {})
             self.assertGreaterEqual(int(metrics.get("estimated_primary_calls", 0) or 0), 0)
             self.assertGreaterEqual(int(metrics.get("estimated_secondary_calls", 0) or 0), 0)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_weekend_block_prevents_start_and_cycle(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            saturday_utc = datetime(2026, 5, 2, 15, 0, tzinfo=timezone.utc)
+
+            with patch.object(service, "_now_utc", return_value=saturday_utc):
+                started = service.start_with_guard()
+                self.assertFalse(started["started"])
+                self.assertTrue(started["blocked"])
+                self.assertEqual(started["reason"], "weekend_blocked")
+
+                cycle = service.run_cycle_once()
+                self.assertEqual(cycle.decision.action, "hold")
+                self.assertIn("Weekend block active", cycle.decision.reasoning)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

@@ -260,6 +260,13 @@ class TradingAppService:
         except Exception:
             return ZoneInfo("America/New_York")
 
+    def _now_utc(self) -> datetime:
+        return datetime.now(tz=timezone.utc)
+
+    def _is_weekend_market_day(self) -> bool:
+        now_et = self._now_utc().astimezone(self._market_tz())
+        return now_et.weekday() >= 5
+
     def _load_model_monitor_state(self) -> dict[str, Any]:
         state = load_json(self._model_monitor_state_path)
         if not isinstance(state, dict):
@@ -3200,6 +3207,22 @@ class TradingAppService:
                     "gate": gate,
                     "kill_switch": kill,
                 }
+            if self._is_weekend_market_day():
+                self._last_note = "worker start blocked on weekend"
+                return {
+                    "started": False,
+                    "blocked": True,
+                    "reason": "weekend_blocked",
+                    "status": {
+                        "running": False,
+                        "cycles_completed": self._cycles_completed,
+                        "last_cycle_at": self._last_cycle_at,
+                        "last_note": self._last_note,
+                        "last_error": self._last_error,
+                    },
+                    "gate": gate,
+                    "weekend_blocked": True,
+                }
             if gate.get("blocked_autonomous_live"):
                 self._last_note = "worker start blocked by go-live gate"
                 return {
@@ -3248,6 +3271,17 @@ class TradingAppService:
 
     def run_cycle_once(self) -> CycleResult:
         self._rollover_daily_state_if_needed()
+        if self._is_weekend_market_day():
+            cycle = self._build_guard_cycle(
+                reason="Weekend block active; worker is disabled on Saturday/Sunday.",
+                note="Guard hold: weekend block",
+            )
+            with self._lock:
+                self._cycles_completed += 1
+                self._last_cycle_at = cycle.timestamp.isoformat()
+                self._last_note = cycle.note
+                self._last_error = None
+            return cycle
         kill = self.kill_switch_snapshot()
         if bool(kill.get("enabled", False)):
             cycle = self._build_guard_cycle(
