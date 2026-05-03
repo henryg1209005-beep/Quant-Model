@@ -776,8 +776,14 @@ class TradingEngine:
         finnhub_context = load_finnhub_context(self.settings, self.settings.symbol)
         finnhub_text = render_finnhub_context(finnhub_context)
         dashboard_with_macro = "\n\n".join([dashboard, macro_text, calendar_text, finnhub_text])
-        llm_context = build_llm_context(dashboard_with_macro, bars, self.account)
+        llm_context = build_llm_context(
+            dashboard_with_macro,
+            bars,
+            self.account,
+            recent_bars=max(1, int(self.settings.llm_context_recent_bars)),
+        )
         max_chars = max(2000, int(self.settings.llm_max_context_chars))
+        context_chars_before_truncation = len(llm_context)
         if len(llm_context) > max_chars:
             llm_context = llm_context[:max_chars]
 
@@ -797,7 +803,15 @@ class TradingEngine:
             "active_tier": "primary",
             "state_gate_used_cache": False,
             "state_gate_reason": "",
+            "llm_fresh": True,
+            "cache_age_seconds": 0.0,
+            "cache_source": "",
+            "primary_call_count": 0,
+            "secondary_call_count": 0,
             "context_chars": len(llm_context),
+            "context_chars_before_truncation": context_chars_before_truncation,
+            "context_truncated": bool(context_chars_before_truncation > len(llm_context)),
+            "context_recent_bars": max(1, int(self.settings.llm_context_recent_bars)),
             "max_output_tokens": int(self.settings.llm_max_output_tokens),
             "provider_health": self.llm_provider_health_snapshot(),
         }
@@ -808,6 +822,10 @@ class TradingEngine:
             decision.reasoning = f"{decision.reasoning} [cached:{skip_reason}]".strip()
             llm_routing["state_gate_used_cache"] = True
             llm_routing["state_gate_reason"] = skip_reason
+            llm_routing["llm_fresh"] = False
+            llm_routing["cache_source"] = "state_gate"
+            if self._last_llm_call_at is not None:
+                llm_routing["cache_age_seconds"] = max(0.0, (now_utc - self._last_llm_call_at).total_seconds())
         else:
             primary_provider = str(self.settings.llm_provider)
             secondary_provider = str(self.settings.llm_two_tier_secondary_provider)
@@ -821,6 +839,7 @@ class TradingEngine:
                 primary_provider = "openai"
             try:
                 if self._provider_is_unhealthy(primary_provider) and self.llm_secondary is not None:
+                    llm_routing["secondary_call_count"] = int(llm_routing["secondary_call_count"]) + 1
                     raw_primary, decision = self._decide_with_retries(
                         self.llm_secondary, llm_context, provider=secondary_provider
                     )
@@ -828,6 +847,7 @@ class TradingEngine:
                     llm_routing["secondary_invoked"] = True
                     llm_routing["secondary_reason"] = "primary_unhealthy_failover"
                 else:
+                    llm_routing["primary_call_count"] = int(llm_routing["primary_call_count"]) + 1
                     raw_primary, decision = self._decide_with_retries(
                         primary_client, llm_context, provider=primary_provider
                     )
@@ -841,6 +861,7 @@ class TradingEngine:
                 failover_succeeded = False
                 if self.llm_secondary is not None:
                     try:
+                        llm_routing["secondary_call_count"] = int(llm_routing["secondary_call_count"]) + 1
                         raw_secondary, decision = self._decide_with_retries(
                             self.llm_secondary, llm_context, provider=secondary_provider
                         )
@@ -866,6 +887,10 @@ class TradingEngine:
                         decision.reasoning = f"{decision.reasoning} [fallback:last_valid_decision]".strip()
                         llm_routing["state_gate_used_cache"] = True
                         llm_routing["state_gate_reason"] = f"primary_exception_fallback_cache:{self._exc_brief(primary_exc)}"
+                        llm_routing["llm_fresh"] = False
+                        llm_routing["cache_source"] = "last_valid_decision"
+                        if self._last_llm_call_at is not None:
+                            llm_routing["cache_age_seconds"] = max(0.0, (now_utc - self._last_llm_call_at).total_seconds())
                     else:
                         decision = _hold_decision("LLM unavailable; fallback deterministic hold.")
                         decision.forecast_direction = "LONG" if self._get_dim_value(context, "Trend", 0.0) >= 0 else "SHORT"
@@ -874,9 +899,12 @@ class TradingEngine:
                         raw = ""
                         llm_routing["state_gate_used_cache"] = True
                         llm_routing["state_gate_reason"] = f"llm_unavailable_deterministic_hold:{self._exc_brief(primary_exc)}"
+                        llm_routing["llm_fresh"] = False
+                        llm_routing["cache_source"] = "deterministic_hold"
         escalate, reason = self._should_escalate_to_secondary(decision)
         if (not llm_routing["state_gate_used_cache"]) and escalate and self.llm_secondary is not None:
             try:
+                llm_routing["secondary_call_count"] = int(llm_routing["secondary_call_count"]) + 1
                 raw_secondary, decision = self._decide_with_retries(
                     self.llm_secondary, llm_context, provider=str(self.settings.llm_two_tier_secondary_provider)
                 )

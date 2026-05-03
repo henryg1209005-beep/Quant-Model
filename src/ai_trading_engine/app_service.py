@@ -1012,10 +1012,14 @@ class TradingAppService:
             md = dict(r.get("metadata") or {})
             lr = dict(md.get("llm_routing") or {})
             if bool(lr):
-                if not bool(lr.get("state_gate_used_cache", False)):
-                    primary_calls += 1
-                if bool(lr.get("secondary_invoked", False)):
-                    secondary_calls += 1
+                if "primary_call_count" in lr or "secondary_call_count" in lr:
+                    primary_calls += int(lr.get("primary_call_count", 0) or 0)
+                    secondary_calls += int(lr.get("secondary_call_count", 0) or 0)
+                else:
+                    if not bool(lr.get("state_gate_used_cache", False)):
+                        primary_calls += 1
+                    if bool(lr.get("secondary_invoked", False)):
+                        secondary_calls += 1
 
         est = (
             float(primary_calls) * float(self._settings.automation_cost_est_primary_call_usd)

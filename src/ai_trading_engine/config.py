@@ -140,6 +140,7 @@ class Settings:
     llm_two_tier_min_confidence: float
     llm_two_tier_max_confidence: float
     llm_max_context_chars: int
+    llm_context_recent_bars: int
     llm_max_output_tokens: int
     llm_state_change_gate_enabled: bool
     llm_state_change_min_seconds: int
@@ -420,6 +421,7 @@ DEFAULT_SETTINGS = Settings(
     llm_two_tier_min_confidence=_get_float("LLM_TWO_TIER_MIN_CONFIDENCE", 0.52),
     llm_two_tier_max_confidence=_get_float("LLM_TWO_TIER_MAX_CONFIDENCE", 0.70),
     llm_max_context_chars=_get_int("LLM_MAX_CONTEXT_CHARS", 8000),
+    llm_context_recent_bars=_get_int("LLM_CONTEXT_RECENT_BARS", 5),
     llm_max_output_tokens=_get_int("LLM_MAX_OUTPUT_TOKENS", 240),
     llm_state_change_gate_enabled=_get_bool("LLM_STATE_CHANGE_GATE_ENABLED", True),
     llm_state_change_min_seconds=_get_int("LLM_STATE_CHANGE_MIN_SECONDS", 180),
