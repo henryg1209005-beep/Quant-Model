@@ -3046,6 +3046,14 @@ class TradingAppService:
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "quote_stale"}
             return
+        if bool(quality_flags.get("spread_too_wide", False)):
+            cycle.metadata = dict(cycle.metadata or {})
+            cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "spread_too_wide"}
+            return
+        if bool(quality_flags.get("outside_session", False)):
+            cycle.metadata = dict(cycle.metadata or {})
+            cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "outside_session"}
+            return
         allow_sample, reason = self._should_store_sample(symbol)
         if allow_sample:
             self._persistence.save_data_sample(cycle, metadata=metadata)
@@ -4180,6 +4188,66 @@ class TradingAppService:
             "sample_balance_skip_rate": float(skip_rate),
             "sample_balance_skipped": int(skips),
             "sample_rows": int(len(rows)),
+        }
+
+    def data_quality_counters(self, *, lookback: int = 2000) -> dict[str, Any]:
+        rows = self._persistence.list_data_samples(max(100, min(100000, int(lookback))))
+        total = len(rows)
+        stale = 0
+        wide = 0
+        outside = 0
+        missing_forecast = 0
+        fallback = 0
+        malformed = 0
+        no_quote = 0
+        for r in rows:
+            md = dict(r.get("metadata") or {})
+            sq = dict(md.get("sample_quality") or {})
+            flags = dict(sq.get("flags") or {})
+            if bool(r.get("quality_quote_stale", flags.get("quote_stale", False))):
+                stale += 1
+            if bool(r.get("quality_spread_too_wide", flags.get("spread_too_wide", False))):
+                wide += 1
+            if bool(r.get("quality_outside_session", flags.get("outside_session", False))):
+                outside += 1
+            if bool(r.get("quality_missing_forecast", flags.get("missing_forecast", False))):
+                missing_forecast += 1
+            quote_last = float(r.get("quote_last", 0.0) or 0.0)
+            if quote_last <= 0.0:
+                no_quote += 1
+            lr = dict(md.get("llm_routing") or {})
+            reason = str(lr.get("state_gate_reason") or "").lower()
+            sec_reason = str(lr.get("secondary_reason") or "").lower()
+            if "fallback" in reason or "unavailable" in reason or "fallback" in sec_reason:
+                fallback += 1
+            if "no json object found" in reason or "parse_failed" in reason or "max_tokens" in sec_reason:
+                malformed += 1
+
+        def _ratio(v: int) -> float:
+            return float(v) / float(max(1, total))
+
+        return {
+            "ok": True,
+            "lookback": int(lookback),
+            "rows": int(total),
+            "counts": {
+                "quote_stale": int(stale),
+                "spread_too_wide": int(wide),
+                "outside_session": int(outside),
+                "missing_forecast": int(missing_forecast),
+                "fallback_decisions": int(fallback),
+                "malformed_output": int(malformed),
+                "no_quote": int(no_quote),
+            },
+            "rates": {
+                "quote_stale_rate": _ratio(stale),
+                "spread_too_wide_rate": _ratio(wide),
+                "outside_session_rate": _ratio(outside),
+                "missing_forecast_rate": _ratio(missing_forecast),
+                "fallback_rate": _ratio(fallback),
+                "malformed_output_rate": _ratio(malformed),
+                "no_quote_rate": _ratio(no_quote),
+            },
         }
 
     def trades(self, limit: int) -> list[dict[str, Any]]:

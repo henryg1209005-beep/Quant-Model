@@ -1898,6 +1898,13 @@ def api_quality_controls(
     return {"quality_controls": service.quality_controls_status(lookback=lookback)}
 
 
+@app.get("/api/data-quality-counters")
+def api_data_quality_counters(
+    lookback: int = Query(default=2000, ge=100, le=100000),
+) -> dict:
+    return {"data_quality": service.data_quality_counters(lookback=lookback)}
+
+
 @app.get("/api/portfolio/optimise")
 def api_portfolio_optimise(
     lookback: int = Query(default=5000, ge=1, le=50000),
