@@ -4190,8 +4190,32 @@ class TradingAppService:
             "sample_rows": int(len(rows)),
         }
 
-    def data_quality_counters(self, *, lookback: int = 2000) -> dict[str, Any]:
+    def data_quality_counters(self, *, lookback: int = 2000, since_timestamp: str | None = None) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(100, min(100000, int(lookback))))
+        since_dt: datetime | None = None
+        if since_timestamp:
+            try:
+                parsed = datetime.fromisoformat(str(since_timestamp))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                since_dt = parsed.astimezone(timezone.utc)
+            except Exception:
+                since_dt = None
+
+        if since_dt is not None:
+            filtered: list[dict[str, Any]] = []
+            for r in rows:
+                ts = str(r.get("timestamp") or "")
+                try:
+                    dt = datetime.fromisoformat(ts)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.astimezone(timezone.utc)
+                except Exception:
+                    continue
+                if dt >= since_dt:
+                    filtered.append(r)
+            rows = filtered
         total = len(rows)
         stale = 0
         wide = 0
@@ -4229,6 +4253,7 @@ class TradingAppService:
         return {
             "ok": True,
             "lookback": int(lookback),
+            "since_timestamp": since_dt.isoformat() if since_dt else None,
             "rows": int(total),
             "counts": {
                 "quote_stale": int(stale),

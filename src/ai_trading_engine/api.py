@@ -1901,8 +1901,9 @@ def api_quality_controls(
 @app.get("/api/data-quality-counters")
 def api_data_quality_counters(
     lookback: int = Query(default=2000, ge=100, le=100000),
+    since_timestamp: str | None = Query(default=None),
 ) -> dict:
-    return {"data_quality": service.data_quality_counters(lookback=lookback)}
+    return {"data_quality": service.data_quality_counters(lookback=lookback, since_timestamp=since_timestamp)}
 
 
 @app.get("/api/portfolio/optimise")
