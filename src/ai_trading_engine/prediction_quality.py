@@ -97,23 +97,52 @@ def _metric(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "accuracy": 0.0,
             "avg_signed_return_bps": 0.0,
             "median_signed_return_bps": 0.0,
+            "trimmed_mean_signed_return_bps": 0.0,
+            "p25_signed_return_bps": 0.0,
+            "p75_signed_return_bps": 0.0,
+            "tail_loss_bps_p5": 0.0,
+            "tail_win_bps_p95": 0.0,
             "avg_forward_return_bps": 0.0,
             "brier_score": 0.0,
             "avg_confidence": 0.0,
+            "win_count": 0,
+            "loss_count": 0,
+            "avg_win_bps": 0.0,
+            "avg_loss_bps": 0.0,
+            "win_loss_ratio": 0.0,
+            "expectancy_bps": 0.0,
         }
     signed = [float(r["signed_return_bps"]) for r in rows]
     forward = [float(r["forward_return_bps"]) for r in rows]
     wins = [1.0 if s > 0 else 0.0 for s in signed]
     conf = [_clip(float(r["confidence"]), 0.0, 1.0) for r in rows]
     brier = sum((p - y) ** 2 for p, y in zip(conf, wins)) / float(len(rows))
+    sorted_signed = sorted(signed)
+    trim_n = int(len(sorted_signed) * 0.1)
+    trimmed = sorted_signed[trim_n:len(sorted_signed) - trim_n] if trim_n > 0 else sorted_signed
+    win_returns = [s for s in signed if s > 0.0]
+    loss_returns = [s for s in signed if s <= 0.0]
+    avg_win = sum(win_returns) / float(len(win_returns)) if win_returns else 0.0
+    avg_loss = sum(loss_returns) / float(len(loss_returns)) if loss_returns else 0.0
     return {
         "count": len(rows),
         "accuracy": sum(wins) / float(len(rows)),
         "avg_signed_return_bps": sum(signed) / float(len(rows)),
         "median_signed_return_bps": statistics.median(signed),
+        "trimmed_mean_signed_return_bps": sum(trimmed) / float(len(trimmed)) if trimmed else 0.0,
+        "p25_signed_return_bps": _percentile(sorted_signed, 0.25),
+        "p75_signed_return_bps": _percentile(sorted_signed, 0.75),
+        "tail_loss_bps_p5": _percentile(sorted_signed, 0.05),
+        "tail_win_bps_p95": _percentile(sorted_signed, 0.95),
         "avg_forward_return_bps": sum(forward) / float(len(rows)),
         "brier_score": brier,
         "avg_confidence": sum(conf) / float(len(rows)),
+        "win_count": len(win_returns),
+        "loss_count": len(loss_returns),
+        "avg_win_bps": avg_win,
+        "avg_loss_bps": avg_loss,
+        "win_loss_ratio": (avg_win / abs(avg_loss)) if avg_loss < 0.0 else 0.0,
+        "expectancy_bps": sum(signed) / float(len(rows)),
     }
 
 
@@ -122,6 +151,52 @@ def _group_metrics(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, 
     for row in rows:
         groups.setdefault(str(row.get(key) or "unknown"), []).append(row)
     return {k: _metric(v) for k, v in sorted(groups.items())}
+
+
+def _percentile(sorted_values: list[float], q: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return float(sorted_values[0])
+    pos = _clip(float(q), 0.0, 1.0) * (len(sorted_values) - 1)
+    lo = int(pos)
+    hi = min(lo + 1, len(sorted_values) - 1)
+    weight = pos - lo
+    return float((sorted_values[lo] * (1.0 - weight)) + (sorted_values[hi] * weight))
+
+
+def _calibration_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_bin: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_bin.setdefault(str(row.get("confidence_bin") or "unknown"), []).append(row)
+
+    buckets: dict[str, dict[str, Any]] = {}
+    weighted_abs_error = 0.0
+    total = 0
+    for label, items in sorted(by_bin.items()):
+        if not items:
+            continue
+        metric = _metric(items)
+        mean_conf = sum(_clip(float(r.get("confidence", 0.0)), 0.0, 1.0) for r in items) / float(len(items))
+        realized = float(metric["accuracy"])
+        error = realized - mean_conf
+        weighted_abs_error += abs(error) * len(items)
+        total += len(items)
+        buckets[label] = {
+            "count": len(items),
+            "mean_confidence": mean_conf,
+            "realized_accuracy": realized,
+            "calibration_error": error,
+            "abs_calibration_error": abs(error),
+            "avg_signed_return_bps": float(metric["avg_signed_return_bps"]),
+            "brier_score": float(metric["brier_score"]),
+        }
+
+    return {
+        "count": total,
+        "weighted_abs_calibration_error": (weighted_abs_error / float(total)) if total else 0.0,
+        "by_confidence_bin": buckets,
+    }
 
 
 def _filter_samples_by_quality(samples: list[dict[str, Any]], quality_mode: str) -> list[dict[str, Any]]:
@@ -264,6 +339,7 @@ def build_prediction_quality_report(
             "horizon_minutes": horizon,
             "label_count": len(labels),
             "overall": _metric(labels),
+            "calibration": _calibration_diagnostics(labels),
             "by_symbol": _group_metrics(labels, "symbol"),
             "by_direction": _group_metrics(labels, "direction"),
             "by_confidence_bin": _group_metrics(labels, "confidence_bin"),
