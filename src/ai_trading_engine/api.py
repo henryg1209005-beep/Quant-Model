@@ -1414,19 +1414,19 @@ def home() -> str:
           fetchJson("/api/metrics"),
           fetchJson("/api/decisions?limit=15"),
           fetchJson("/api/trades?limit=15"),
-          fetchJson("/api/decisions?limit=200"),
-          fetchJson("/api/trades?limit=200"),
+          fetchJson("/api/decisions?limit=80"),
+          fetchJson("/api/trades?limit=80"),
           fetchJson("/api/go-live-gate"),
           fetchJson("/api/audit?limit=20"),
           fetchJson("/api/notifications?limit=20"),
           fetchJson("/api/session-config"),
           fetchJson("/api/acceleration"),
-          fetchJson("/api/research/prediction-quality?lookback=1000&horizons=5,15,30&min_confidence=0&quality_mode=good_only"),
+          fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only"),
           fetchJson("/api/model-monitoring"),
-          fetchJson("/api/research/symbol-performance?lookback=100000&horizon_minutes=15&quality_mode=good_only"),
+          fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
           fetchJson("/api/quality-controls"),
-          fetchJson("/api/research/champion-challenger-daily?lookback=100000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&challenger_min_confidence=0.55&min_daily_selections=10"),
-          fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=100000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=300&robust_only=false"),
+          fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&challenger_min_confidence=0.55&min_daily_selections=10"),
+          fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=20000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=120&robust_only=false"),
           fetchJson("/api/autonomy/health-score"),
           fetchJson("/api/automation/guards"),
           fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
@@ -1550,7 +1550,7 @@ def home() -> str:
     }
 
     refreshAll();
-    setInterval(refreshAll, 3000);
+    setInterval(refreshAll, 15000);
   </script>
 </body>
 </html>
