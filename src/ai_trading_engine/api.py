@@ -1317,6 +1317,30 @@ def home() -> str:
       if (reason.startsWith("Session gate:")) {
         return { label: "Session window", detail: reason.replace(/^Session gate:\\s*/, "") };
       }
+      if (reason.startsWith("Weekend block active;")) {
+        return { label: "Weekend block", detail: "Worker is intentionally paused on Saturday and Sunday." };
+      }
+      if (reason.startsWith("Trading kill switch enabled:")) {
+        return { label: "Kill switch enabled", detail: reason.replace(/^Trading kill switch enabled:\\s*/, "") };
+      }
+      if (reason.startsWith("Data quality guard active:")) {
+        return { label: "Data quality guard", detail: reason.replace(/^Data quality guard active:\\s*/, "") };
+      }
+      if (reason.startsWith("Cost guard active:")) {
+        return { label: "Cost guard", detail: reason.replace(/^Cost guard active:\\s*/, "") };
+      }
+      if (reason.startsWith("Signed-bps kill switch active:")) {
+        return { label: "Performance kill switch", detail: reason.replace(/^Signed-bps kill switch active:\\s*/, "") };
+      }
+      if (reason.startsWith("Broker sync stale while position open")) {
+        return { label: "Broker sync stale", detail: reason };
+      }
+      if (reason.startsWith("Symbol gate active:")) {
+        return { label: "Symbol gate", detail: reason.replace(/^Symbol gate active:\\s*/, "") };
+      }
+      if (reason.startsWith("Model monitoring safe mode active:")) {
+        return { label: "Model monitoring safe mode", detail: reason.replace(/^Model monitoring safe mode active:\\s*/, "") };
+      }
       if (reason.startsWith("Risk override: max trades reached.")) {
         return { label: "Daily trade cap", detail: "Maximum trades for the day has been reached." };
       }
