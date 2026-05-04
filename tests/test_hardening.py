@@ -236,6 +236,42 @@ class TestHardening(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_collection_override_persists_sample_even_if_stale_or_wide(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            cycle = CycleResult(
+                timestamp=datetime.now(tz=timezone.utc),
+                dashboard="DASH",
+                llm_raw="",
+                decision=AiDecision(
+                    action="hold",
+                    direction=None,
+                    confidence=0.0,
+                    size=1,
+                    sl_ticks=0,
+                    tp_ticks=0,
+                    reasoning="base",
+                    forecast_direction="LONG",
+                    forecast_confidence=0.5,
+                    forecast_horizon_minutes=15,
+                ),
+                note="base",
+                metadata={
+                    "quote": {"last": 100.0},
+                    "sample_quality": {"flags": {"quote_stale": True, "spread_too_wide": True}},
+                    "collection_override": {"allow_low_quality_sample": True},
+                },
+            )
+            meta = {"symbol": settings.symbol}
+            with patch.object(service._persistence, "save_data_sample") as save_sample:
+                service._persist_cycle_and_sample(cycle, metadata=meta, symbol=settings.symbol)
+            save_sample.assert_called_once()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_cost_mode_increases_worker_wait_when_quality_guard_active(self) -> None:
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)

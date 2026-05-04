@@ -3164,17 +3164,19 @@ class TradingAppService:
         sample_quality["hard_fail_flags"] = hard_fail_flags
         sample_quality["good"] = not any(bool(v) for v in hard_fail_flags.values())
         cycle.metadata["sample_quality"] = sample_quality
+        collection_override = dict(cycle.metadata.get("collection_override") or {})
+        allow_low_quality_sample = bool(collection_override.get("allow_low_quality_sample", False))
 
         self._persistence.save_cycle(cycle, metadata=metadata)
-        if bool(quality_flags.get("quote_stale", False)):
+        if (not allow_low_quality_sample) and bool(quality_flags.get("quote_stale", False)):
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "quote_stale"}
             return
-        if bool(quality_flags.get("spread_too_wide", False)):
+        if (not allow_low_quality_sample) and bool(quality_flags.get("spread_too_wide", False)):
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "spread_too_wide"}
             return
-        if bool(quality_flags.get("outside_session", False)):
+        if (not allow_low_quality_sample) and bool(quality_flags.get("outside_session", False)):
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "outside_session"}
             return
@@ -3551,6 +3553,12 @@ class TradingAppService:
                     cycle.decision.sl_ticks = 0
                     cycle.decision.tp_ticks = 0
                     cycle.decision.reasoning = f"Data quality guard active: {quality_guard.get('reason')}."
+                    if in_session:
+                        cycle.metadata = dict(cycle.metadata or {})
+                        cycle.metadata["collection_override"] = {
+                            "allow_low_quality_sample": True,
+                            "reason": "in_session_low_volume_recovery",
+                        }
             else:
                 cycle = self._build_guard_cycle(
                     reason=f"Data quality guard active: {quality_guard.get('reason')}.",
