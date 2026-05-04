@@ -59,6 +59,17 @@ def _get_optional_float(name: str) -> float | None:
         return None
 
 
+def _get_env(name: str, default: str = "", aliases: tuple[str, ...] = ()) -> str:
+    raw = os.getenv(name)
+    if raw is not None and raw.strip() != "":
+        return raw
+    for alias in aliases:
+        alt = os.getenv(alias)
+        if alt is not None and alt.strip() != "":
+            return alt
+    return default
+
+
 def _get_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -454,8 +465,8 @@ DEFAULT_SETTINGS = Settings(
     gemini_timeout_seconds=_get_int("GEMINI_TIMEOUT_SECONDS", 30),
     data_provider=os.getenv("DATA_PROVIDER", "mock").strip().lower(),
     execution_provider=os.getenv("EXECUTION_PROVIDER", "mock").strip().lower(),
-    alpaca_key_id=os.getenv("ALPACA_KEY_ID", ""),
-    alpaca_secret_key=os.getenv("ALPACA_SECRET_KEY", ""),
+    alpaca_key_id=_get_env("ALPACA_KEY_ID", "", aliases=("ALPACA_API_KEY",)),
+    alpaca_secret_key=_get_env("ALPACA_SECRET_KEY", "", aliases=("ALPACA_API_SECRET",)),
     alpaca_data_url=os.getenv("ALPACA_DATA_URL", "https://data.alpaca.markets"),
     alpaca_trading_url=os.getenv("ALPACA_TRADING_URL", "https://paper-api.alpaca.markets"),
     enable_session_filter=_get_bool("ENABLE_SESSION_FILTER", True),

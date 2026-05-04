@@ -3767,7 +3767,7 @@ class TradingAppService:
 
         metadata = self._decision_metadata()
         cycle.metadata = dict(cycle.metadata or {})
-        cycle.metadata["model_monitoring"] = monitor
+        cycle.metadata["model_monitoring"] = self.model_monitoring_status()
         cycle.metadata["confidence_controls"] = {
             "enabled": bool(confidence_controls.get("enabled", False)),
             "evaluated_at": confidence_controls.get("evaluated_at"),
