@@ -3508,10 +3508,13 @@ class TradingAppService:
             reason_text = str(quality_guard.get("reason") or "")
             breaches = [s.strip() for s in reason_text.split(";") if s.strip()]
             low_volume_only = bool(breaches) and all(b.startswith("low_sample_volume:") for b in breaches)
+            q_metrics = dict(quality_guard.get("metrics") or {})
+            in_session = bool(q_metrics.get("in_session", False))
             if low_volume_only:
                 if (
                     bool(self._settings.automation_cost_mode_enabled)
                     and bool(self._settings.automation_cost_mode_skip_low_volume_collect)
+                    and (not in_session)
                 ):
                     cycle = self._build_guard_cycle(
                         reason=f"Data quality guard active: {quality_guard.get('reason')}. Cost mode skipped low-volume collection cycle.",
