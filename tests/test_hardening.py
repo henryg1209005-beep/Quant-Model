@@ -136,7 +136,10 @@ class TestHardening(unittest.TestCase):
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)
         try:
-            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            settings = _service_settings(
+                app_db_path=str(tmp / "app.db"),
+                automation_cost_mode_enabled=False,
+            )
             service = TradingAppService(settings, Persistence(settings.app_db_path))
             cycle = CycleResult(
                 timestamp=datetime.now(tz=timezone.utc),
@@ -163,6 +166,42 @@ class TestHardening(unittest.TestCase):
             run_cycle.assert_called_once_with(collect_only=True)
             self.assertEqual(out.note, "Guard hold: data quality")
             self.assertEqual(out.decision.action, "hold")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_low_volume_quality_guard_skips_collection_when_cost_mode_enabled(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(
+                app_db_path=str(tmp / "app.db"),
+                automation_cost_mode_enabled=True,
+                automation_cost_mode_skip_low_volume_collect=True,
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            with patch.object(service, "_evaluate_data_quality_guard", return_value={"active": True, "reason": "low_sample_volume:0<20"}):
+                with patch.object(service._engine, "run_cycle") as run_cycle:
+                    out = service.run_cycle_once()
+            run_cycle.assert_not_called()
+            self.assertEqual(out.decision.action, "hold")
+            self.assertIn("Cost mode skipped low-volume collection cycle", out.decision.reasoning)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_cost_mode_increases_worker_wait_when_quality_guard_active(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(
+                app_db_path=str(tmp / "app.db"),
+                cycle_seconds=30,
+                automation_cost_mode_enabled=True,
+                automation_quality_throttle_cycle_seconds=120,
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path, database_url=settings.database_url))
+            service._quality_guard_state = {"active": True}
+            wait_seconds = service._next_cycle_wait_seconds()
+            self.assertEqual(wait_seconds, 120)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

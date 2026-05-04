@@ -349,6 +349,11 @@ class Settings:
     automation_cost_hard_block: bool
     automation_cost_est_primary_call_usd: float
     automation_cost_est_secondary_call_usd: float
+    automation_cost_mode_enabled: bool
+    automation_cost_mode_cycle_seconds: int
+    automation_cost_mode_skip_low_volume_collect: bool
+    automation_cost_mode_disable_finnhub_context: bool
+    automation_cost_mode_disable_economic_calendar: bool
     automation_auto_recovery_enabled: bool
     automation_auto_recovery_cooldown_seconds: int
     robust_allowlist_enabled: bool
@@ -632,6 +637,11 @@ DEFAULT_SETTINGS = Settings(
     automation_cost_hard_block=_get_bool("AUTOMATION_COST_HARD_BLOCK", True),
     automation_cost_est_primary_call_usd=_get_float("AUTOMATION_COST_EST_PRIMARY_CALL_USD", 0.0012),
     automation_cost_est_secondary_call_usd=_get_float("AUTOMATION_COST_EST_SECONDARY_CALL_USD", 0.0060),
+    automation_cost_mode_enabled=_get_bool("AUTOMATION_COST_MODE_ENABLED", True),
+    automation_cost_mode_cycle_seconds=_get_int("AUTOMATION_COST_MODE_CYCLE_SECONDS", 90),
+    automation_cost_mode_skip_low_volume_collect=_get_bool("AUTOMATION_COST_MODE_SKIP_LOW_VOLUME_COLLECT", True),
+    automation_cost_mode_disable_finnhub_context=_get_bool("AUTOMATION_COST_MODE_DISABLE_FINNHUB_CONTEXT", True),
+    automation_cost_mode_disable_economic_calendar=_get_bool("AUTOMATION_COST_MODE_DISABLE_ECONOMIC_CALENDAR", True),
     automation_auto_recovery_enabled=_get_bool("AUTOMATION_AUTO_RECOVERY_ENABLED", True),
     automation_auto_recovery_cooldown_seconds=_get_int("AUTOMATION_AUTO_RECOVERY_COOLDOWN_SECONDS", 300),
     robust_allowlist_enabled=_get_bool("ROBUST_ALLOWLIST_ENABLED", True),

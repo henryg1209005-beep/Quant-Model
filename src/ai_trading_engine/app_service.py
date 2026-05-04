@@ -538,7 +538,19 @@ class TradingAppService:
                     self._last_error = str(exc)
                     self._last_note = "cycle failed"
                 self._notify("worker_cycle_failed", {"error": str(exc), "model_name": MODEL_NAME})
-            self._stop_event.wait(timeout=max(1, self._settings.cycle_seconds))
+            self._stop_event.wait(timeout=self._next_cycle_wait_seconds())
+
+    def _next_cycle_wait_seconds(self) -> int:
+        wait_seconds = max(1, int(self._settings.cycle_seconds))
+        if not bool(self._settings.automation_cost_mode_enabled):
+            return wait_seconds
+        quality = dict(self._quality_guard_state or {})
+        cost = dict(self._cost_guard_state or {})
+        if bool(quality.get("active", False)):
+            wait_seconds = max(wait_seconds, int(self._settings.automation_quality_throttle_cycle_seconds))
+        if bool(cost.get("warning", False)) or bool(cost.get("active", False)):
+            wait_seconds = max(wait_seconds, int(self._settings.automation_cost_mode_cycle_seconds))
+        return max(1, wait_seconds)
 
     def _evaluate_signed_bps_gate(self, *, force: bool = False) -> dict[str, Any]:
         now = datetime.now(tz=timezone.utc)
@@ -3381,22 +3393,45 @@ class TradingAppService:
             breaches = [s.strip() for s in reason_text.split(";") if s.strip()]
             low_volume_only = bool(breaches) and all(b.startswith("low_sample_volume:") for b in breaches)
             if low_volume_only:
-                try:
-                    cycle = self._engine.run_cycle(collect_only=True)
-                except Exception as exc:
+                if (
+                    bool(self._settings.automation_cost_mode_enabled)
+                    and bool(self._settings.automation_cost_mode_skip_low_volume_collect)
+                ):
                     cycle = self._build_guard_cycle(
-                        reason=f"Data quality guard active: {quality_guard.get('reason')}.",
+                        reason=f"Data quality guard active: {quality_guard.get('reason')}. Cost mode skipped low-volume collection cycle.",
                         note="Guard hold: data quality",
                     )
-                    cycle.metadata = dict(cycle.metadata or {})
-                    cycle.metadata["quality_guard_collect_error"] = str(exc)
-                cycle.note = "Guard hold: data quality"
-                cycle.decision.action = "hold"
-                cycle.decision.direction = None
-                cycle.decision.size = 1
-                cycle.decision.sl_ticks = 0
-                cycle.decision.tp_ticks = 0
-                cycle.decision.reasoning = f"Data quality guard active: {quality_guard.get('reason')}."
+                else:
+                    engine_settings = self._engine.settings
+                    if bool(self._settings.automation_cost_mode_enabled):
+                        engine_settings = replace(
+                            self._engine.settings,
+                            finnhub_context_enabled=(
+                                False if bool(self._settings.automation_cost_mode_disable_finnhub_context) else self._engine.settings.finnhub_context_enabled
+                            ),
+                            economic_calendar_enabled=(
+                                False if bool(self._settings.automation_cost_mode_disable_economic_calendar) else self._engine.settings.economic_calendar_enabled
+                            ),
+                        )
+                    try:
+                        self._engine.settings = engine_settings
+                        cycle = self._engine.run_cycle(collect_only=True)
+                    except Exception as exc:
+                        cycle = self._build_guard_cycle(
+                            reason=f"Data quality guard active: {quality_guard.get('reason')}.",
+                            note="Guard hold: data quality",
+                        )
+                        cycle.metadata = dict(cycle.metadata or {})
+                        cycle.metadata["quality_guard_collect_error"] = str(exc)
+                    finally:
+                        self._engine.settings = self._settings
+                    cycle.note = "Guard hold: data quality"
+                    cycle.decision.action = "hold"
+                    cycle.decision.direction = None
+                    cycle.decision.size = 1
+                    cycle.decision.sl_ticks = 0
+                    cycle.decision.tp_ticks = 0
+                    cycle.decision.reasoning = f"Data quality guard active: {quality_guard.get('reason')}."
             else:
                 cycle = self._build_guard_cycle(
                     reason=f"Data quality guard active: {quality_guard.get('reason')}.",
