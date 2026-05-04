@@ -3061,8 +3061,11 @@ class TradingAppService:
         cycle.metadata = dict(cycle.metadata or {})
         sample_quality = dict(cycle.metadata.get("sample_quality") or {})
         quality_flags = dict(sample_quality.get("flags") or {})
+        quote_last = float(((cycle.metadata or {}).get("quote") or {}).get("last", 0.0) or 0.0)
+        quality_flags["no_quote"] = bool(quote_last <= 0.0)
         quality_flags["missing_forecast"] = not forecast_ok
         hard_fail_flags = dict(sample_quality.get("hard_fail_flags") or {})
+        hard_fail_flags["no_quote"] = bool(quality_flags["no_quote"])
         hard_fail_flags["missing_forecast"] = bool(quality_flags["missing_forecast"])
         sample_quality["flags"] = quality_flags
         sample_quality["hard_fail_flags"] = hard_fail_flags
@@ -3081,6 +3084,10 @@ class TradingAppService:
         if bool(quality_flags.get("outside_session", False)):
             cycle.metadata = dict(cycle.metadata or {})
             cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "outside_session"}
+            return
+        if bool(quality_flags.get("no_quote", False)):
+            cycle.metadata = dict(cycle.metadata or {})
+            cycle.metadata["sample_balance_skipped"] = {"symbol": symbol, "reason": "no_quote"}
             return
         allow_sample, reason = self._should_store_sample(symbol)
         if allow_sample:
@@ -3370,10 +3377,31 @@ class TradingAppService:
 
         quality_guard = self._evaluate_data_quality_guard()
         if bool(quality_guard.get("active", False)):
-            cycle = self._build_guard_cycle(
-                reason=f"Data quality guard active: {quality_guard.get('reason')}.",
-                note="Guard hold: data quality",
-            )
+            reason_text = str(quality_guard.get("reason") or "")
+            breaches = [s.strip() for s in reason_text.split(";") if s.strip()]
+            low_volume_only = bool(breaches) and all(b.startswith("low_sample_volume:") for b in breaches)
+            if low_volume_only:
+                try:
+                    cycle = self._engine.run_cycle(collect_only=True)
+                except Exception as exc:
+                    cycle = self._build_guard_cycle(
+                        reason=f"Data quality guard active: {quality_guard.get('reason')}.",
+                        note="Guard hold: data quality",
+                    )
+                    cycle.metadata = dict(cycle.metadata or {})
+                    cycle.metadata["quality_guard_collect_error"] = str(exc)
+                cycle.note = "Guard hold: data quality"
+                cycle.decision.action = "hold"
+                cycle.decision.direction = None
+                cycle.decision.size = 1
+                cycle.decision.sl_ticks = 0
+                cycle.decision.tp_ticks = 0
+                cycle.decision.reasoning = f"Data quality guard active: {quality_guard.get('reason')}."
+            else:
+                cycle = self._build_guard_cycle(
+                    reason=f"Data quality guard active: {quality_guard.get('reason')}.",
+                    note="Guard hold: data quality",
+                )
             with self._lock:
                 self._cycles_completed += 1
                 self._last_cycle_at = cycle.timestamp.isoformat()

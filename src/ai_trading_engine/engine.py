@@ -742,7 +742,7 @@ class TradingEngine:
         target = int(self.settings.risk_per_trade_usd / risk_per_unit) if risk_per_unit > 0 else 1
         return max(1, min(self.settings.max_position_size, target))
 
-    def run_cycle(self) -> CycleResult:
+    def run_cycle(self, *, collect_only: bool = False) -> CycleResult:
         quote = self.data_adapter.get_latest_quote(self.settings.symbol)
 
         closed = self.execution.process_open_position(quote, self.account)
@@ -1016,7 +1016,15 @@ class TradingEngine:
             challenger_trade=challenger_trade,
         )
 
-        if decision.action == "trade":
+        if decision.action == "trade" and bool(collect_only):
+            decision.action = "hold"
+            decision.direction = None
+            decision.size = 1
+            decision.sl_ticks = 0
+            decision.tp_ticks = 0
+            decision.reasoning = f"{decision.reasoning} [collection_only]".strip()
+            note = "Hold (collection_only)"
+        elif decision.action == "trade":
             accel_tag = "[ACCEL:ON] " if bool(self._gate_profile["active"]) else ""
             decision.reasoning = (
                 f"[REGIME:{indicators.regime}][CONF:{decision.confidence:.2f}] {accel_tag}"

@@ -10,7 +10,8 @@ import uuid
 
 from ai_trading_engine.app_service import TradingAppService
 from ai_trading_engine.config import DEFAULT_SETTINGS
-from ai_trading_engine.engine import TradingEngine
+from ai_trading_engine.engine import CycleResult, TradingEngine
+from ai_trading_engine.models import AiDecision
 from ai_trading_engine.persistence import Persistence
 
 
@@ -112,6 +113,56 @@ class TestHardening(unittest.TestCase):
                 cycle = service.run_cycle_once()
                 self.assertEqual(cycle.decision.action, "hold")
                 self.assertIn("Weekend block active", cycle.decision.reasoning)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_no_quote_samples_are_not_persisted_as_data_samples(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            cycle = service._build_guard_cycle(reason="guard", note="guard")
+            meta = {"symbol": settings.symbol}
+            with patch.object(service._persistence, "save_data_sample") as save_sample:
+                service._persist_cycle_and_sample(cycle, metadata=meta, symbol=settings.symbol)
+            save_sample.assert_not_called()
+            flags = dict((cycle.metadata or {}).get("sample_quality", {}).get("flags", {}))
+            self.assertTrue(bool(flags.get("no_quote", False)))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_low_volume_quality_guard_collects_cycle_in_collection_mode(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            cycle = CycleResult(
+                timestamp=datetime.now(tz=timezone.utc),
+                dashboard="DASH",
+                llm_raw="",
+                decision=AiDecision(
+                    action="hold",
+                    direction=None,
+                    confidence=0.0,
+                    size=1,
+                    sl_ticks=0,
+                    tp_ticks=0,
+                    reasoning="base",
+                    forecast_direction="LONG",
+                    forecast_confidence=0.5,
+                    forecast_horizon_minutes=15,
+                ),
+                note="base",
+                metadata={"quote": {"last": 100.0}},
+            )
+            with patch.object(service, "_evaluate_data_quality_guard", return_value={"active": True, "reason": "low_sample_volume:0<20"}):
+                with patch.object(service._engine, "run_cycle", return_value=cycle) as run_cycle:
+                    out = service.run_cycle_once()
+            run_cycle.assert_called_once_with(collect_only=True)
+            self.assertEqual(out.note, "Guard hold: data quality")
+            self.assertEqual(out.decision.action, "hold")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
