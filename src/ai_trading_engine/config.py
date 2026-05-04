@@ -407,8 +407,8 @@ class Settings:
 
 DEFAULT_SETTINGS = Settings(
     env=os.getenv("ENV", "dev"),
-    symbol=os.getenv("SYMBOL", "ES"),
-    symbols=_get_csv("SYMBOLS", os.getenv("SYMBOL", "ES")),
+    symbol=os.getenv("SYMBOL", "SPY"),
+    symbols=_get_csv("SYMBOLS", os.getenv("SYMBOL", "SPY")),
     multi_symbol_enabled=_get_bool("MULTI_SYMBOL_ENABLED", False),
     multi_symbol_shadow_enabled=_get_bool("MULTI_SYMBOL_SHADOW_ENABLED", True),
     multi_symbol_paper_only=_get_bool("MULTI_SYMBOL_PAPER_ONLY", True),

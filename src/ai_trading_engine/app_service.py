@@ -267,6 +267,23 @@ class TradingAppService:
         now_et = self._now_utc().astimezone(self._market_tz())
         return now_et.weekday() >= 5
 
+    def _provider_symbol_compatibility(self) -> tuple[bool, str]:
+        if str(self._settings.data_provider or "").strip().lower() != "alpaca":
+            return True, "ok"
+        blocked_futures = {
+            "ES", "MES", "NQ", "MNQ", "YM", "MYM", "RTY", "M2K", "CL", "GC", "SI", "HG", "NG",
+        }
+        configured = [str(self._settings.symbol or "").strip().upper()]
+        configured.extend(str(s or "").strip().upper() for s in (self._settings.symbols or ()))
+        unsupported = sorted({s for s in configured if s in blocked_futures})
+        if not unsupported:
+            return True, "ok"
+        return (
+            False,
+            "Provider-symbol mismatch: Alpaca data provider does not support futures symbols for this workflow "
+            f"({', '.join(unsupported)}). Use Alpaca-supported symbols like SPY/QQQ.",
+        )
+
     def _is_in_session_window(self) -> bool:
         if not bool(self._settings.enable_session_filter):
             return True
@@ -3309,6 +3326,23 @@ class TradingAppService:
                     "gate": gate,
                     "kill_switch": kill,
                 }
+            compat_ok, compat_reason = self._provider_symbol_compatibility()
+            if not compat_ok:
+                self._last_note = "worker start blocked by provider-symbol compatibility"
+                return {
+                    "started": False,
+                    "blocked": True,
+                    "reason": "provider_symbol_unsupported",
+                    "status": {
+                        "running": False,
+                        "cycles_completed": self._cycles_completed,
+                        "last_cycle_at": self._last_cycle_at,
+                        "last_note": self._last_note,
+                        "last_error": self._last_error,
+                    },
+                    "gate": gate,
+                    "compatibility": {"ok": False, "reason": compat_reason},
+                }
             if self._is_weekend_market_day():
                 self._last_note = "worker start blocked on weekend"
                 return {
@@ -3373,6 +3407,18 @@ class TradingAppService:
 
     def run_cycle_once(self) -> CycleResult:
         self._rollover_daily_state_if_needed()
+        compat_ok, compat_reason = self._provider_symbol_compatibility()
+        if not compat_ok:
+            cycle = self._build_guard_cycle(
+                reason=compat_reason,
+                note="Guard hold: provider-symbol compatibility",
+            )
+            with self._lock:
+                self._cycles_completed += 1
+                self._last_cycle_at = cycle.timestamp.isoformat()
+                self._last_note = cycle.note
+                self._last_error = None
+            return cycle
         if self._is_weekend_market_day():
             cycle = self._build_guard_cycle(
                 reason="Weekend block active; worker is disabled on Saturday/Sunday.",

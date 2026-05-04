@@ -116,6 +116,32 @@ class TestHardening(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_provider_symbol_compatibility_blocks_alpaca_futures(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = replace(
+                DEFAULT_SETTINGS,
+                llm_provider="mock",
+                llm_two_tier_enabled=False,
+                data_provider="alpaca",
+                execution_provider="mock",
+                auto_retrain_enabled=False,
+                autonomous_research_enabled=False,
+                app_db_path=str(tmp / "app.db"),
+                symbol="ES",
+                symbols=("ES",),
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            started = service.start_with_guard()
+            self.assertFalse(started["started"])
+            self.assertEqual(started["reason"], "provider_symbol_unsupported")
+            cycle = service.run_cycle_once()
+            self.assertEqual(cycle.decision.action, "hold")
+            self.assertIn("Provider-symbol mismatch", cycle.decision.reasoning)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_no_quote_samples_are_not_persisted_as_data_samples(self) -> None:
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)
