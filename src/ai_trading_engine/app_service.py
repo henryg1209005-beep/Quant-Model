@@ -4316,6 +4316,10 @@ class TradingAppService:
         fallback = 0
         malformed = 0
         no_quote = 0
+        elig_sum = 0.0
+        elig_high = 0
+        elig_medium = 0
+        elig_low = 0
         for r in rows:
             md = dict(r.get("metadata") or {})
             sq = dict(md.get("sample_quality") or {})
@@ -4338,6 +4342,23 @@ class TradingAppService:
                 fallback += 1
             if "no json object found" in reason or "parse_failed" in reason or "max_tokens" in sec_reason:
                 malformed += 1
+            elig = self._sample_eligibility_score(
+                quote_stale=bool(r.get("quality_quote_stale", flags.get("quote_stale", False))),
+                spread_too_wide=bool(r.get("quality_spread_too_wide", flags.get("spread_too_wide", False))),
+                outside_session=bool(r.get("quality_outside_session", flags.get("outside_session", False))),
+                missing_forecast=bool(r.get("quality_missing_forecast", flags.get("missing_forecast", False))),
+                no_quote=bool(quote_last <= 0.0),
+                fallback=bool("fallback" in reason or "unavailable" in reason or "fallback" in sec_reason),
+                malformed=bool("no json object found" in reason or "parse_failed" in reason or "max_tokens" in sec_reason),
+            )
+            elig_sum += float(elig["score"])
+            grade = str(elig["grade"])
+            if grade == "high":
+                elig_high += 1
+            elif grade == "medium":
+                elig_medium += 1
+            else:
+                elig_low += 1
 
         def _ratio(v: int) -> float:
             return float(v) / float(max(1, total))
@@ -4364,6 +4385,110 @@ class TradingAppService:
                 "fallback_rate": _ratio(fallback),
                 "malformed_output_rate": _ratio(malformed),
                 "no_quote_rate": _ratio(no_quote),
+            },
+            "sample_eligibility": {
+                "avg_score": (elig_sum / float(max(1, total))),
+                "high_count": int(elig_high),
+                "medium_count": int(elig_medium),
+                "low_count": int(elig_low),
+                "high_rate": _ratio(elig_high),
+                "medium_rate": _ratio(elig_medium),
+                "low_rate": _ratio(elig_low),
+            },
+        }
+
+    def _sample_eligibility_score(
+        self,
+        *,
+        quote_stale: bool,
+        spread_too_wide: bool,
+        outside_session: bool,
+        missing_forecast: bool,
+        no_quote: bool,
+        fallback: bool,
+        malformed: bool,
+    ) -> dict[str, Any]:
+        score = 1.0
+        penalties = {
+            "quote_stale": 0.35,
+            "spread_too_wide": 0.25,
+            "outside_session": 0.15,
+            "missing_forecast": 0.15,
+            "no_quote": 0.30,
+            "fallback": 0.10,
+            "malformed_output": 0.20,
+        }
+        applied: list[str] = []
+        checks = {
+            "quote_stale": bool(quote_stale),
+            "spread_too_wide": bool(spread_too_wide),
+            "outside_session": bool(outside_session),
+            "missing_forecast": bool(missing_forecast),
+            "no_quote": bool(no_quote),
+            "fallback": bool(fallback),
+            "malformed_output": bool(malformed),
+        }
+        for name, active in checks.items():
+            if active:
+                score -= float(penalties.get(name, 0.0))
+                applied.append(name)
+        score = max(0.0, min(1.0, score))
+        grade = "high" if score >= 0.85 else ("medium" if score >= 0.65 else "low")
+        return {"score": score, "grade": grade, "penalties": applied}
+
+    def data_readiness_status(self, *, lookback: int = 2000) -> dict[str, Any]:
+        dq = self.data_quality_counters(lookback=lookback)
+        qc = self.quality_controls_status(lookback=lookback)
+        rates = dict(dq.get("rates") or {})
+        elig = dict(dq.get("sample_eligibility") or {})
+        coverage = dict(qc.get("coverage_guard") or {})
+        quality_score = max(
+            0.0,
+            min(
+                1.0,
+                1.0
+                - (
+                    0.20 * float(rates.get("quote_stale_rate", 0.0) or 0.0)
+                    + 0.15 * float(rates.get("spread_too_wide_rate", 0.0) or 0.0)
+                    + 0.10 * float(rates.get("outside_session_rate", 0.0) or 0.0)
+                    + 0.20 * float(rates.get("no_quote_rate", 0.0) or 0.0)
+                    + 0.20 * float(rates.get("missing_forecast_rate", 0.0) or 0.0)
+                    + 0.10 * float(rates.get("fallback_rate", 0.0) or 0.0)
+                    + 0.05 * float(rates.get("malformed_output_rate", 0.0) or 0.0)
+                ),
+            ),
+        )
+        target = max(1.0, float(coverage.get("target", 1.0) or 1.0))
+        labels = max(0.0, float(coverage.get("daily_labels", 0.0) or 0.0))
+        coverage_score = max(0.0, min(1.0, labels / target))
+        eligibility_score = max(0.0, min(1.0, float(elig.get("avg_score", 0.0) or 0.0)))
+        skip_score = max(0.0, min(1.0, 1.0 - float(qc.get("sample_balance_skip_rate", 0.0) or 0.0)))
+        overall = (
+            (0.40 * quality_score)
+            + (0.25 * eligibility_score)
+            + (0.25 * coverage_score)
+            + (0.10 * skip_score)
+        )
+        score = int(round(max(0.0, min(1.0, overall)) * 100.0))
+        grade = "ready" if score >= 80 else ("watch" if score >= 60 else "not_ready")
+        return {
+            "ok": True,
+            "lookback": int(lookback),
+            "score": score,
+            "grade": grade,
+            "components": {
+                "quality": quality_score,
+                "eligibility": eligibility_score,
+                "coverage": coverage_score,
+                "sample_balance": skip_score,
+            },
+            "inputs": {
+                "rows": int(dq.get("rows", 0) or 0),
+                "daily_labels": labels,
+                "daily_label_target": target,
+                "sample_balance_skip_rate": float(qc.get("sample_balance_skip_rate", 0.0) or 0.0),
+                "rates": rates,
+                "sample_eligibility": elig,
             },
         }
 
