@@ -479,6 +479,7 @@ def home() -> str:
       <div class="card"><div class="kpi-label">Cycles</div><div id="kCycles" class="kpi-val">-</div></div>
       <div class="card"><div class="kpi-label">Latest Note</div><div id="kNote" class="kpi-val" style="font-size:0.92rem">-</div></div>
       <div class="card"><div class="kpi-label">Autonomy Health</div><div id="kAutonomyHealth" class="kpi-val">-</div></div>
+      <div class="card"><div class="kpi-label">Data Readiness</div><div id="kDataReadiness" class="kpi-val">-</div></div>
       <div class="card"><div class="kpi-label">Data Pace (1h)</div><div id="kDataPace" class="kpi-val">-</div></div>
       <div class="card"><div class="kpi-label">Projected Daily Samples</div><div id="kProjSamples" class="kpi-val">-</div></div>
       <div class="card"><div class="kpi-label">Top Error Cause</div><div id="kTopCause" class="kpi-val">-</div></div>
@@ -1404,7 +1405,8 @@ def home() -> str:
           autoHealthRes,
           guardsRes,
           causesRes,
-          automationRes
+          automationRes,
+          readinessRes
         ] = await Promise.all([
           fetchJson("/api/status"),
           fetchJson("/api/account"),
@@ -1428,7 +1430,8 @@ def home() -> str:
           fetchJson("/api/autonomy/health-score"),
           fetchJson("/api/automation/guards"),
           fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
-          fetchJson("/api/automation")
+          fetchJson("/api/automation"),
+          fetchJson("/api/data-readiness?lookback=2000")
         ]);
 
         const cfg = cfgRes.config || {};
@@ -1452,6 +1455,7 @@ def home() -> str:
         const topCause = causes.top_cause || {};
         const llmHealth = status.llm_provider_health || {};
         const automation = automationRes.automation || {};
+        const readiness = readinessRes.data_readiness || {};
         const automationState = automation.state || {};
         const weekly = automation.weekly_experiments || {};
         const weeklyLast = weekly.last || {};
@@ -1488,6 +1492,7 @@ def home() -> str:
         document.getElementById("kCycles").textContent = n(status.cycles_completed, 0);
         document.getElementById("kNote").textContent = status.last_note || "-";
         document.getElementById("kAutonomyHealth").textContent = `${n(autonomyHealth.score, 0)} (${autonomyHealth.grade || "-"})`;
+        document.getElementById("kDataReadiness").textContent = `${n(readiness.score, 0)} (${String(readiness.grade || "-")})`;
         const windowMins = Math.max(1, Number(qMetrics.window_minutes || 60));
         const sampleCountWin = Math.max(0, Number(qMetrics.samples || 0));
         const samplesPerHour = sampleCountWin * (60.0 / windowMins);
