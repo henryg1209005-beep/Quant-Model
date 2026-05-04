@@ -139,6 +139,7 @@ class TestHardening(unittest.TestCase):
             settings = _service_settings(
                 app_db_path=str(tmp / "app.db"),
                 automation_cost_mode_enabled=False,
+                budget_lock_enabled=False,
             )
             service = TradingAppService(settings, Persistence(settings.app_db_path))
             cycle = CycleResult(
@@ -177,6 +178,7 @@ class TestHardening(unittest.TestCase):
                 app_db_path=str(tmp / "app.db"),
                 automation_cost_mode_enabled=True,
                 automation_cost_mode_skip_low_volume_collect=True,
+                budget_lock_enabled=False,
             )
             service = TradingAppService(settings, Persistence(settings.app_db_path))
             with patch.object(service, "_evaluate_data_quality_guard", return_value={"active": True, "reason": "low_sample_volume:0<20"}):
@@ -202,6 +204,41 @@ class TestHardening(unittest.TestCase):
             service._quality_guard_state = {"active": True}
             wait_seconds = service._next_cycle_wait_seconds()
             self.assertEqual(wait_seconds, 120)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_budget_lock_blocks_outside_session_when_no_open_position(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(
+                app_db_path=str(tmp / "app.db"),
+                budget_lock_enabled=True,
+                budget_lock_in_session_only=True,
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            with patch.object(service, "_is_in_session_window", return_value=False):
+                cycle = service.run_cycle_once()
+            self.assertEqual(cycle.decision.action, "hold")
+            self.assertIn("Budget lock active: outside configured session window", cycle.decision.reasoning)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_budget_lock_blocks_when_hourly_llm_cap_reached(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(
+                app_db_path=str(tmp / "app.db"),
+                budget_lock_enabled=True,
+                budget_lock_in_session_only=False,
+                budget_lock_max_llm_calls_per_hour=2,
+            )
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+            with patch.object(service, "_estimate_llm_calls_recent", return_value=2):
+                cycle = service.run_cycle_once()
+            self.assertEqual(cycle.decision.action, "hold")
+            self.assertIn("hourly LLM call cap reached", cycle.decision.reasoning)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

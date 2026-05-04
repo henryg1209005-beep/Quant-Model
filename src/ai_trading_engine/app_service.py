@@ -267,6 +267,94 @@ class TradingAppService:
         now_et = self._now_utc().astimezone(self._market_tz())
         return now_et.weekday() >= 5
 
+    def _is_in_session_window(self) -> bool:
+        if not bool(self._settings.enable_session_filter):
+            return True
+        now_et = self._now_utc().astimezone(self._market_tz())
+        minutes = (now_et.hour * 60) + now_et.minute
+
+        def _parse_hhmm(raw: str, fallback: int) -> int:
+            try:
+                hh, mm = str(raw or "").split(":", 1)
+                return max(0, min(23, int(hh))) * 60 + max(0, min(59, int(mm)))
+            except Exception:
+                return fallback
+
+        start = _parse_hhmm(str(self._settings.session_start_et), 9 * 60 + 35)
+        end = _parse_hhmm(str(self._settings.session_end_et), 15 * 60 + 45)
+        if start <= end:
+            return start <= minutes <= end
+        return minutes >= start or minutes <= end
+
+    @staticmethod
+    def _to_non_negative_int(value: Any) -> int:
+        try:
+            n = int(float(value))
+        except Exception:
+            return 0
+        return max(0, n)
+
+    def _estimate_llm_calls_recent(self, *, window_minutes: int = 60, sample_limit: int = 5000) -> int:
+        start = datetime.now(tz=timezone.utc) - timedelta(minutes=max(1, int(window_minutes)))
+        rows = self._persistence.list_data_samples(max(100, int(sample_limit)))
+        total_calls = 0
+        for r in rows:
+            try:
+                ts = datetime.fromisoformat(str(r.get("timestamp") or ""))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if ts < start:
+                continue
+            md = dict(r.get("metadata") or {})
+            lr = dict(md.get("llm_routing") or {})
+            if not lr:
+                continue
+            if "primary_call_count" in lr or "secondary_call_count" in lr:
+                total_calls += self._to_non_negative_int(lr.get("primary_call_count", 0))
+                total_calls += self._to_non_negative_int(lr.get("secondary_call_count", 0))
+                continue
+            if not bool(lr.get("state_gate_used_cache", False)):
+                total_calls += 1
+            if bool(lr.get("secondary_invoked", False)):
+                total_calls += 1
+        return total_calls
+
+    def _run_engine_cycle_with_budget_lock(self, *, collect_only: bool = False) -> CycleResult:
+        if not bool(self._settings.budget_lock_enabled):
+            return self._engine.run_cycle(collect_only=collect_only)
+        locked_settings = replace(
+            self._engine.settings,
+            llm_state_change_min_seconds=max(
+                int(self._engine.settings.llm_state_change_min_seconds),
+                int(self._settings.budget_lock_state_change_min_seconds),
+            ),
+            llm_state_change_price_bps=max(float(self._engine.settings.llm_state_change_price_bps), 14.0),
+            llm_state_change_trend_delta=max(float(self._engine.settings.llm_state_change_trend_delta), 18.0),
+            llm_state_change_momentum_delta=max(float(self._engine.settings.llm_state_change_momentum_delta), 18.0),
+            llm_two_tier_escalate_on_trade=(
+                False
+                if bool(self._settings.budget_lock_disable_secondary_escalation)
+                else bool(self._engine.settings.llm_two_tier_escalate_on_trade)
+            ),
+            finnhub_context_enabled=(
+                False
+                if bool(self._settings.automation_cost_mode_disable_finnhub_context)
+                else bool(self._engine.settings.finnhub_context_enabled)
+            ),
+            economic_calendar_enabled=(
+                False
+                if bool(self._settings.automation_cost_mode_disable_economic_calendar)
+                else bool(self._engine.settings.economic_calendar_enabled)
+            ),
+        )
+        try:
+            self._engine.settings = locked_settings
+            return self._engine.run_cycle(collect_only=collect_only)
+        finally:
+            self._engine.settings = self._settings
+
     def _load_model_monitor_state(self) -> dict[str, Any]:
         state = load_json(self._model_monitor_state_path)
         if not isinstance(state, dict):
@@ -1001,13 +1089,6 @@ class TradingAppService:
         }
 
     def _evaluate_cost_guard(self, *, force: bool = False) -> dict[str, Any]:
-        def _to_non_negative_int(value: Any) -> int:
-            try:
-                n = int(float(value))
-            except Exception:
-                return 0
-            return max(0, n)
-
         now = datetime.now(tz=timezone.utc)
         if not bool(self._settings.automation_cost_guard_enabled):
             self._cost_guard_state = {
@@ -1049,8 +1130,8 @@ class TradingAppService:
             lr = dict(md.get("llm_routing") or {})
             if bool(lr):
                 if "primary_call_count" in lr or "secondary_call_count" in lr:
-                    primary_calls += _to_non_negative_int(lr.get("primary_call_count", 0))
-                    secondary_calls += _to_non_negative_int(lr.get("secondary_call_count", 0))
+                    primary_calls += self._to_non_negative_int(lr.get("primary_call_count", 0))
+                    secondary_calls += self._to_non_negative_int(lr.get("secondary_call_count", 0))
                 else:
                     if not bool(lr.get("state_gate_used_cache", False)):
                         primary_calls += 1
@@ -3319,6 +3400,41 @@ class TradingAppService:
             self._persistence.save_account(self._engine.account)
             self._notify("trading_kill_switch_hold", {"kill_switch": kill, "metadata": metadata})
             return cycle
+        if bool(self._settings.budget_lock_enabled) and self._engine.account.open_position is None:
+            if bool(self._settings.budget_lock_in_session_only) and (not self._is_in_session_window()):
+                cycle = self._build_guard_cycle(
+                    reason="Budget lock active: outside configured session window; skipping expensive cycle.",
+                    note="Guard hold: budget lock session window",
+                )
+                with self._lock:
+                    self._cycles_completed += 1
+                    self._last_cycle_at = cycle.timestamp.isoformat()
+                    self._last_note = cycle.note
+                    self._last_error = None
+                metadata = self._decision_metadata()
+                cycle.metadata = dict(cycle.metadata or {})
+                cycle.metadata["budget_lock"] = {"enabled": True, "reason": "outside_session_window"}
+                self._persist_cycle_and_sample(cycle, metadata=metadata, symbol=str(metadata.get('symbol') or self._settings.symbol))
+                self._persistence.save_account(self._engine.account)
+                return cycle
+            cap = max(1, int(self._settings.budget_lock_max_llm_calls_per_hour))
+            llm_calls = self._estimate_llm_calls_recent(window_minutes=60)
+            if llm_calls >= cap:
+                cycle = self._build_guard_cycle(
+                    reason=f"Budget lock active: hourly LLM call cap reached ({llm_calls}/{cap}).",
+                    note="Guard hold: budget lock llm cap",
+                )
+                with self._lock:
+                    self._cycles_completed += 1
+                    self._last_cycle_at = cycle.timestamp.isoformat()
+                    self._last_note = cycle.note
+                    self._last_error = None
+                metadata = self._decision_metadata()
+                cycle.metadata = dict(cycle.metadata or {})
+                cycle.metadata["budget_lock"] = {"enabled": True, "reason": "llm_call_cap", "llm_calls_last_hour": llm_calls, "llm_cap_per_hour": cap}
+                self._persist_cycle_and_sample(cycle, metadata=metadata, symbol=str(metadata.get('symbol') or self._settings.symbol))
+                self._persistence.save_account(self._engine.account)
+                return cycle
         synced = self._sync_account_from_broker(force_baseline=False, record_closures=True)
         pos = self._engine.account.open_position
         stale_sync_limit = max(10, int(self._settings.broker_sync_stale_seconds))
@@ -3415,7 +3531,7 @@ class TradingAppService:
                         )
                     try:
                         self._engine.settings = engine_settings
-                        cycle = self._engine.run_cycle(collect_only=True)
+                        cycle = self._run_engine_cycle_with_budget_lock(collect_only=True)
                     except Exception as exc:
                         cycle = self._build_guard_cycle(
                             reason=f"Data quality guard active: {quality_guard.get('reason')}.",
@@ -3501,7 +3617,7 @@ class TradingAppService:
             }
             self._engine.set_horizon_controls(forced_horizon)
             try:
-                cycle = self._engine.run_cycle()
+                cycle = self._run_engine_cycle_with_budget_lock()
             except Exception as exc:
                 cycle = self._build_guard_cycle(
                     reason=f"Cycle execution failed during symbol gate hold: {exc}",
@@ -3567,7 +3683,7 @@ class TradingAppService:
         horizon_gate = self._evaluate_horizon_gate()
 
         try:
-            cycle = self._engine.run_cycle()
+            cycle = self._run_engine_cycle_with_budget_lock()
         except Exception as exc:
             cycle = self._build_guard_cycle(
                 reason=f"Cycle execution failed: {exc}",

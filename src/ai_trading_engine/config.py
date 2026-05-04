@@ -354,6 +354,11 @@ class Settings:
     automation_cost_mode_skip_low_volume_collect: bool
     automation_cost_mode_disable_finnhub_context: bool
     automation_cost_mode_disable_economic_calendar: bool
+    budget_lock_enabled: bool
+    budget_lock_in_session_only: bool
+    budget_lock_max_llm_calls_per_hour: int
+    budget_lock_state_change_min_seconds: int
+    budget_lock_disable_secondary_escalation: bool
     automation_auto_recovery_enabled: bool
     automation_auto_recovery_cooldown_seconds: int
     robust_allowlist_enabled: bool
@@ -642,6 +647,11 @@ DEFAULT_SETTINGS = Settings(
     automation_cost_mode_skip_low_volume_collect=_get_bool("AUTOMATION_COST_MODE_SKIP_LOW_VOLUME_COLLECT", True),
     automation_cost_mode_disable_finnhub_context=_get_bool("AUTOMATION_COST_MODE_DISABLE_FINNHUB_CONTEXT", True),
     automation_cost_mode_disable_economic_calendar=_get_bool("AUTOMATION_COST_MODE_DISABLE_ECONOMIC_CALENDAR", True),
+    budget_lock_enabled=_get_bool("BUDGET_LOCK_ENABLED", True),
+    budget_lock_in_session_only=_get_bool("BUDGET_LOCK_IN_SESSION_ONLY", True),
+    budget_lock_max_llm_calls_per_hour=_get_int("BUDGET_LOCK_MAX_LLM_CALLS_PER_HOUR", 24),
+    budget_lock_state_change_min_seconds=_get_int("BUDGET_LOCK_STATE_CHANGE_MIN_SECONDS", 600),
+    budget_lock_disable_secondary_escalation=_get_bool("BUDGET_LOCK_DISABLE_SECONDARY_ESCALATION", True),
     automation_auto_recovery_enabled=_get_bool("AUTOMATION_AUTO_RECOVERY_ENABLED", True),
     automation_auto_recovery_cooldown_seconds=_get_int("AUTOMATION_AUTO_RECOVERY_COOLDOWN_SECONDS", 300),
     robust_allowlist_enabled=_get_bool("ROBUST_ALLOWLIST_ENABLED", True),
