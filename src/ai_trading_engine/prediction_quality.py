@@ -153,6 +153,40 @@ def _group_metrics(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, 
     return {k: _metric(v) for k, v in sorted(groups.items())}
 
 
+def _policy_status(metric: dict[str, Any], *, min_count: int, min_accuracy: float, stress_bps: float) -> str:
+    count = int(metric.get("count", 0) or 0)
+    if count < int(min_count):
+        return "probation"
+    signed = float(metric.get("avg_signed_return_bps", 0.0) or 0.0)
+    accuracy = float(metric.get("accuracy", 0.0) or 0.0)
+    if (signed - float(stress_bps)) > 0.0 and accuracy >= float(min_accuracy):
+        return "allow"
+    return "block"
+
+
+def _policy_rows(
+    rows: list[dict[str, Any]],
+    key: str,
+    *,
+    min_count: int,
+    min_accuracy: float,
+    stress_bps: float,
+) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for label, metric in _group_metrics(rows, key).items():
+        signed = float(metric.get("avg_signed_return_bps", 0.0) or 0.0)
+        row = dict(metric)
+        row["status"] = _policy_status(
+            metric,
+            min_count=max(1, int(min_count)),
+            min_accuracy=max(0.0, min(1.0, float(min_accuracy))),
+            stress_bps=max(0.0, float(stress_bps)),
+        )
+        row["stressed_signed_bps"] = signed - max(0.0, float(stress_bps))
+        out[str(label)] = row
+    return out
+
+
 def _percentile(sorted_values: list[float], q: float) -> float:
     if not sorted_values:
         return 0.0
@@ -456,6 +490,8 @@ def build_confidence_control_report(
     min_symbol_labels: int = 40,
     min_threshold_labels: int = 30,
     default_min_confidence: float = 0.55,
+    policy_min_accuracy: float = 0.50,
+    policy_stress_bps: float = 0.0,
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
@@ -477,6 +513,11 @@ def build_confidence_control_report(
             "default_min_confidence": float(default_min_confidence),
             "global_threshold": float(default_min_confidence),
             "symbol_controls": {},
+            "policy": {
+                "min_accuracy": float(policy_min_accuracy),
+                "stress_bps": float(policy_stress_bps),
+                "by_symbol": {},
+            },
         }
 
     def _choose_threshold(items: list[dict[str, Any]]) -> tuple[float, dict[str, Any]]:
@@ -507,6 +548,7 @@ def build_confidence_control_report(
     global_threshold, global_summary = _choose_threshold(rows)
     symbols = sorted({str(r.get("symbol") or "").upper() for r in rows if r.get("symbol")})
     symbol_controls: dict[str, Any] = {}
+    symbol_policy: dict[str, Any] = {}
     for sym in symbols:
         sym_rows = [r for r in rows if str(r.get("symbol") or "").upper() == sym]
         calibration: dict[str, Any] = {}
@@ -528,6 +570,24 @@ def build_confidence_control_report(
                 "source": "global_fallback_low_sample",
                 "selected_metrics": global_summary,
             }
+            symbol_policy[sym] = {
+                "label_count": len(sym_rows),
+                "source": "global_fallback_low_sample",
+                "by_confidence_bin": _policy_rows(
+                    sym_rows,
+                    "confidence_bin",
+                    min_count=max(1, int(min_bin_count)),
+                    min_accuracy=float(policy_min_accuracy),
+                    stress_bps=float(policy_stress_bps),
+                ),
+                "by_direction": _policy_rows(
+                    sym_rows,
+                    "direction",
+                    min_count=max(1, int(min_symbol_labels)),
+                    min_accuracy=float(policy_min_accuracy),
+                    stress_bps=float(policy_stress_bps),
+                ),
+            }
             continue
         thr, summary = _choose_threshold(sym_rows)
         symbol_controls[sym] = {
@@ -536,6 +596,24 @@ def build_confidence_control_report(
             "calibration": calibration,
             "source": "symbol",
             "selected_metrics": summary,
+        }
+        symbol_policy[sym] = {
+            "label_count": len(sym_rows),
+            "source": "symbol",
+            "by_confidence_bin": _policy_rows(
+                sym_rows,
+                "confidence_bin",
+                min_count=max(1, int(min_bin_count)),
+                min_accuracy=float(policy_min_accuracy),
+                stress_bps=float(policy_stress_bps),
+            ),
+            "by_direction": _policy_rows(
+                sym_rows,
+                "direction",
+                min_count=max(1, int(min_symbol_labels)),
+                min_accuracy=float(policy_min_accuracy),
+                stress_bps=float(policy_stress_bps),
+            ),
         }
 
     return {
@@ -547,4 +625,9 @@ def build_confidence_control_report(
         "global_threshold": float(global_threshold),
         "global_threshold_metrics": global_summary,
         "symbol_controls": symbol_controls,
+        "policy": {
+            "min_accuracy": max(0.0, min(1.0, float(policy_min_accuracy))),
+            "stress_bps": max(0.0, float(policy_stress_bps)),
+            "by_symbol": symbol_policy,
+        },
     }

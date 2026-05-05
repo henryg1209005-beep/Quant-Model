@@ -45,6 +45,44 @@ class TestHardening(unittest.TestCase):
         self.assertIsNone(engine.llm_secondary)
         self.assertTrue(any("secondary_llm_disabled:gemini" in w for w in engine.startup_warnings()))
 
+    def test_direction_policy_blocks_negative_direction(self) -> None:
+        settings = _service_settings(symbol="SPY")
+        engine = TradingEngine(settings)
+        engine.set_confidence_controls(
+            {
+                "enabled": True,
+                "default_min_confidence": 0.50,
+                "global_min_confidence": 0.50,
+                "symbol_min_confidence": {"SPY": 0.50},
+                "symbol_calibration": {},
+                "symbol_blocked_directions": {"SPY": ["SHORT"]},
+                "symbol_direction_policy": {
+                    "SPY": {
+                        "SHORT": {
+                            "count": 105,
+                            "avg_signed_return_bps": -3.09,
+                            "stressed_signed_bps": -6.09,
+                            "status": "block",
+                        }
+                    }
+                },
+            }
+        )
+        decision = AiDecision(
+            action="trade",
+            direction="SHORT",
+            confidence=0.55,
+            size=1,
+            sl_ticks=8,
+            tp_ticks=12,
+            reasoning="test",
+        )
+
+        out = engine._apply_confidence_controls(decision)
+
+        self.assertEqual(out.action, "hold")
+        self.assertIn("Direction policy (SPY): SHORT blocked", out.reasoning)
+
     def test_trading_kill_switch_blocks_start_and_run_once(self) -> None:
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)

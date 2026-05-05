@@ -432,6 +432,8 @@ class TradingEngine:
             "calibration_gate_stress_bps": float(payload.get("calibration_gate_stress_bps", 0.0)),
             "symbol_allowed_confidence_bins": dict(payload.get("symbol_allowed_confidence_bins") or {}),
             "symbol_bin_stressed_bps": dict(payload.get("symbol_bin_stressed_bps") or {}),
+            "symbol_direction_policy": dict(payload.get("symbol_direction_policy") or {}),
+            "symbol_blocked_directions": dict(payload.get("symbol_blocked_directions") or {}),
         }
 
     def set_regime_controls(self, controls: dict[str, Any]) -> None:
@@ -495,6 +497,22 @@ class TradingEngine:
         if not bool(controls.get("enabled", False)):
             return decision
         symbol = str(self.settings.symbol).strip().upper()
+        direction = str(decision.direction or "").strip().upper()
+        blocked_directions = {
+            str(d).strip().upper()
+            for d in (controls.get("symbol_blocked_directions") or {}).get(symbol, [])
+            if str(d).strip()
+        }
+        if direction in blocked_directions:
+            policy = dict((controls.get("symbol_direction_policy") or {}).get(symbol) or {})
+            metrics = dict(policy.get(direction) or {})
+            signed = float(metrics.get("avg_signed_return_bps", 0.0) or 0.0)
+            stressed = float(metrics.get("stressed_signed_bps", signed) or signed)
+            count = int(metrics.get("count", 0) or 0)
+            return _hold_decision(
+                f"Direction policy ({symbol}): {direction} blocked "
+                f"(n={count}, signed_bps={signed:.2f}, stressed_signed_bps={stressed:.2f})."
+            )
         c_raw = _clip(float(decision.confidence), 0.0, 1.0)
         low = int(c_raw * 10) / 10.0
         bin_key = f"{low:.1f}-{low + 0.1:.1f}"

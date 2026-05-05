@@ -1436,12 +1436,17 @@ class TradingAppService:
             min_symbol_labels=max(1, int(self._settings.confidence_control_min_symbol_labels)),
             min_threshold_labels=max(1, int(self._settings.confidence_control_min_threshold_labels)),
             default_min_confidence=max(0.0, min(1.0, float(self._settings.confidence_control_default_min_confidence))),
+            policy_min_accuracy=max(0.0, min(1.0, float(self._settings.symbol_gate_min_accuracy))),
+            policy_stress_bps=max(0.0, float(self._settings.calibration_gate_stress_bps)),
             **self._research_label_filters(),
         )
         symbol_controls = dict(report.get("symbol_controls") or {})
+        policy = dict(report.get("policy") or {})
         stress_bps = float(self._settings.calibration_gate_stress_bps)
         symbol_allowed_confidence_bins: dict[str, list[str]] = {}
         symbol_bin_stressed_bps: dict[str, dict[str, float]] = {}
+        symbol_blocked_directions: dict[str, list[str]] = {}
+        symbol_direction_policy: dict[str, dict[str, Any]] = {}
         for sym, cfg in symbol_controls.items():
             sym_u = str(sym).upper()
             cal = dict((cfg or {}).get("calibration") or {})
@@ -1455,6 +1460,19 @@ class TradingAppService:
                     allowed_bins.append(str(bin_key))
             symbol_allowed_confidence_bins[sym_u] = sorted(set(allowed_bins))
             symbol_bin_stressed_bps[sym_u] = stressed_map
+        for sym, row in dict(policy.get("by_symbol") or {}).items():
+            sym_u = str(sym).upper()
+            by_direction = dict((row or {}).get("by_direction") or {})
+            normalized: dict[str, Any] = {}
+            blocked: list[str] = []
+            for direction, metrics in by_direction.items():
+                direction_u = str(direction).upper()
+                m = dict(metrics or {})
+                normalized[direction_u] = m
+                if str(m.get("status") or "").lower() == "block":
+                    blocked.append(direction_u)
+            symbol_direction_policy[sym_u] = normalized
+            symbol_blocked_directions[sym_u] = sorted(set(blocked))
         controls = {
             "enabled": True,
             "default_min_confidence": float(report.get("default_min_confidence", 0.55)),
@@ -1474,6 +1492,8 @@ class TradingAppService:
             "calibration_gate_stress_bps": stress_bps,
             "symbol_allowed_confidence_bins": symbol_allowed_confidence_bins,
             "symbol_bin_stressed_bps": symbol_bin_stressed_bps,
+            "symbol_direction_policy": symbol_direction_policy,
+            "symbol_blocked_directions": symbol_blocked_directions,
         }
         self._engine.set_confidence_controls(controls)
         self._confidence_control_state.update(
@@ -4481,6 +4501,7 @@ class TradingAppService:
 
     def quality_controls_status(self, *, lookback: int = 2000) -> dict[str, Any]:
         self._evaluate_coverage_guard(force=True)
+        self._evaluate_confidence_controls(force=True)
         self._evaluate_regime_gate(force=True)
         self._evaluate_horizon_gate(force=True)
         quarantine = self._update_symbol_quarantines(force=True)

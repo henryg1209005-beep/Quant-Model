@@ -583,6 +583,11 @@ def home() -> str:
             <div id="qCalSummary" class="small" style="margin:4px 0 8px 0">-</div>
             <div class="table-wrap"><table id="qualityCalibTable"></table></div>
           </div>
+          <div class="chart-card">
+            <div class="chart-title">Direction Policy (15m)</div>
+            <div id="qDirectionSummary" class="small" style="margin:4px 0 8px 0">-</div>
+            <div class="table-wrap"><table id="qualityDirectionPolicyTable"></table></div>
+          </div>
         </div>
         <div class="small" id="qualityNote" style="margin-top:10px"></div>
       </div>
@@ -1087,6 +1092,7 @@ def home() -> str:
         : "OFF";
       document.getElementById("qCalEval").textContent = fmtTs(cc.evaluated_at);
       renderCalibrationGateTable(cc);
+      renderDirectionPolicyTable(cc);
       const perf = ((pt.performance_15m || {}).rows || []);
       const activeRow = perf.find((r) => String(r.policy_tier || "").toLowerCase() === tier);
       const perfText = activeRow
@@ -1142,6 +1148,54 @@ def home() -> str:
       el.innerHTML = `
         <thead><tr><th>Symbol</th><th>Bin</th><th>Stressed Signed Bps</th><th>Status</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="4" class="small">No calibration bin history yet</td></tr>'}</tbody>
+      `;
+    }
+    function renderDirectionPolicyTable(confidenceControls) {
+      const el = document.getElementById("qualityDirectionPolicyTable");
+      if (!el) return;
+      const summaryEl = document.getElementById("qDirectionSummary");
+      const controls = (confidenceControls || {}).controls || {};
+      const policy = controls.symbol_direction_policy || {};
+      const blocked = controls.symbol_blocked_directions || {};
+      const records = [];
+      for (const sym of Object.keys(policy || {}).sort()) {
+        const byDir = policy[sym] || {};
+        for (const dir of Object.keys(byDir).sort()) {
+          const row = byDir[dir] || {};
+          records.push({
+            sym,
+            dir,
+            status: String(row.status || "-"),
+            count: Number(row.count || 0),
+            accuracy: Number(row.accuracy || 0),
+            signed: Number(row.avg_signed_return_bps || 0),
+            stressed: Number(row.stressed_signed_bps || 0),
+          });
+        }
+      }
+      const blockedLabels = [];
+      for (const sym of Object.keys(blocked || {}).sort()) {
+        for (const dir of (blocked[sym] || [])) blockedLabels.push(`${sym} ${dir}`);
+      }
+      if (summaryEl) {
+        summaryEl.textContent = blockedLabels.length
+          ? `Blocked: ${blockedLabels.join(", ")}`
+          : "No blocked directions";
+      }
+      const rows = records.map((r) => `
+            <tr>
+              <td>${r.sym}</td>
+              <td>${r.dir}</td>
+              <td>${n(r.count, 0)}</td>
+              <td>${pct(r.accuracy)}</td>
+              <td>${n(r.signed, 2)}</td>
+              <td>${n(r.stressed, 2)}</td>
+              <td>${badge(r.status, r.status === "allow" ? "b-long" : (r.status === "block" ? "b-short" : "b-hold"))}</td>
+            </tr>
+          `).join("");
+      el.innerHTML = `
+        <thead><tr><th>Symbol</th><th>Direction</th><th>N</th><th>Accuracy</th><th>Signed Bps</th><th>Stressed Bps</th><th>Status</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="small">No direction policy history yet</td></tr>'}</tbody>
       `;
     }
     function renderSymbolGate(report) {

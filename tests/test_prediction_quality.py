@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ai_trading_engine.prediction_quality import build_prediction_quality_report
+from ai_trading_engine.prediction_quality import build_confidence_control_report, build_prediction_quality_report
 
 
 class TestPredictionQuality(unittest.TestCase):
@@ -112,6 +112,69 @@ class TestPredictionQuality(unittest.TestCase):
         self.assertAlmostEqual(bucket["realized_accuracy"], 0.5)
         self.assertAlmostEqual(bucket["mean_confidence"], 0.75)
         self.assertAlmostEqual(bucket["calibration_error"], -0.25)
+
+    def test_confidence_control_report_classifies_direction_policy(self) -> None:
+        samples = []
+        for i in range(8):
+            ts = f"2026-04-29T13:{i:02d}:00+00:00"
+            future = f"2026-04-29T13:{i + 15:02d}:00+00:00"
+            samples.append(
+                {
+                    "timestamp": ts,
+                    "symbol": "SPY",
+                    "quote_last": 100.0,
+                    "forecast_direction": "LONG",
+                    "forecast_confidence": 0.55,
+                    "sample_quality_good": True,
+                }
+            )
+            samples.append(
+                {
+                    "timestamp": future,
+                    "symbol": "SPY",
+                    "quote_last": 101.0,
+                    "forecast_direction": "LONG",
+                    "forecast_confidence": 0.55,
+                    "sample_quality_good": True,
+                }
+            )
+        for i in range(8):
+            ts = f"2026-04-29T14:{i:02d}:00+00:00"
+            future = f"2026-04-29T14:{i + 15:02d}:00+00:00"
+            samples.append(
+                {
+                    "timestamp": ts,
+                    "symbol": "SPY",
+                    "quote_last": 100.0,
+                    "forecast_direction": "SHORT",
+                    "forecast_confidence": 0.55,
+                    "sample_quality_good": True,
+                }
+            )
+            samples.append(
+                {
+                    "timestamp": future,
+                    "symbol": "SPY",
+                    "quote_last": 101.0,
+                    "forecast_direction": "SHORT",
+                    "forecast_confidence": 0.55,
+                    "sample_quality_good": True,
+                }
+            )
+
+        report = build_confidence_control_report(
+            samples,
+            horizon_minutes=15,
+            min_bin_count=4,
+            min_symbol_labels=4,
+            min_threshold_labels=4,
+            policy_min_accuracy=0.50,
+            policy_stress_bps=0.0,
+        )
+        by_direction = report["policy"]["by_symbol"]["SPY"]["by_direction"]
+
+        self.assertEqual(by_direction["LONG"]["status"], "allow")
+        self.assertEqual(by_direction["SHORT"]["status"], "block")
 
 
 if __name__ == "__main__":
