@@ -619,6 +619,15 @@ def home() -> str:
           <div class="card"><div class="kpi-label">Significance</div><div id="ccSig" class="kpi-val">-</div></div>
         </div>
         <div class="table-wrap"><table id="ccTable"></table></div>
+        <h3 style="margin-top:14px">Short Challenger Slice (Daily OOS)</h3>
+        <div class="kpis">
+          <div class="card"><div class="kpi-label">Short Champ bps</div><div id="ccShortChampSigned" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Short Chall bps</div><div id="ccShortChallSigned" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Short Delta bps</div><div id="ccShortDeltaSigned" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Short CI95</div><div id="ccShortCi95" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Short Significance</div><div id="ccShortSig" class="kpi-val">-</div></div>
+        </div>
+        <div class="table-wrap"><table id="ccShortTable"></table></div>
       </div>
       </div>
 
@@ -1246,7 +1255,7 @@ def home() -> str:
         <tbody>${body || '<tr><td colspan="8" class="small">No robust cells yet</td></tr>'}</tbody>
       `;
     }
-    function renderChampionChallenger(report) {
+    function renderChampionChallenger(report, shortReport) {
       const cc = (report || {}).champion_challenger_daily || {};
       const c = cc.champion_overall || {};
       const h = cc.challenger_overall || {};
@@ -1273,6 +1282,34 @@ def home() -> str:
       el.innerHTML = `
         <thead><tr><th>Day</th><th>Champ N</th><th>Champ bps</th><th>Chall N</th><th>Chall bps</th><th>Delta bps</th><th>Allowed Cells</th></tr></thead>
         <tbody>${body || '<tr><td colspan="7" class="small">No OOS days yet</td></tr>'}</tbody>
+      `;
+
+      const ccShort = (shortReport || {}).champion_challenger_daily || {};
+      const sc = ccShort.champion_overall || {};
+      const sh = ccShort.challenger_overall || {};
+      const ss = ccShort.significance || {};
+      document.getElementById("ccShortChampSigned").textContent = n(sc.signed_bps, 2);
+      document.getElementById("ccShortChallSigned").textContent = n(sh.signed_bps, 2);
+      document.getElementById("ccShortDeltaSigned").textContent = n(ccShort.overall_delta_signed_bps, 2);
+      document.getElementById("ccShortCi95").textContent = `[${n(ss.ci95_low,2)}, ${n(ss.ci95_high,2)}]`;
+      document.getElementById("ccShortSig").textContent = ss.significant_positive ? "Positive (95%)" : "Not significant";
+      const sRows = ccShort.days || [];
+      const sEl = document.getElementById("ccShortTable");
+      if (!sEl) return;
+      const sBody = sRows.map((r) => `
+        <tr>
+          <td>${r.day || "-"}</td>
+          <td>${n(r.champion_count,0)}</td>
+          <td>${n(r.champion_signed_bps,2)}</td>
+          <td>${n(r.challenger_count,0)}</td>
+          <td>${n(r.challenger_signed_bps,2)}</td>
+          <td>${n(r.delta_signed_bps,2)}</td>
+          <td>${n(r.allowed_cells,0)}</td>
+        </tr>
+      `).join("");
+      sEl.innerHTML = `
+        <thead><tr><th>Day</th><th>Champ N</th><th>Champ bps</th><th>Chall N</th><th>Chall bps</th><th>Delta bps</th><th>Allowed Cells</th></tr></thead>
+        <tbody>${sBody || '<tr><td colspan="7" class="small">No short-slice OOS days yet</td></tr>'}</tbody>
       `;
     }
 
@@ -1455,6 +1492,7 @@ def home() -> str:
           symbolPerfRes,
           controlsRes,
           ccRes,
+          ccShortRes,
           cbRes,
           autoHealthRes,
           guardsRes,
@@ -1480,6 +1518,7 @@ def home() -> str:
           fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
           fetchJson("/api/quality-controls"),
           fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&challenger_min_confidence=0.55&min_daily_selections=10"),
+          fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&direction=SHORT&challenger_min_confidence=0.60&challenger_max_confidence=0.80&min_daily_selections=8"),
           fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=20000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=120&robust_only=false"),
           fetchJson("/api/autonomy/health-score"),
           fetchJson("/api/automation/guards"),
@@ -1533,7 +1572,7 @@ def home() -> str:
         renderDecisionMix(decisionsWide);
         renderPredictionQuality(qualityRes, controlsRes);
         renderSymbolGate(symbolPerfRes);
-        renderChampionChallenger(ccRes);
+        renderChampionChallenger(ccRes, ccShortRes);
         renderCellBootstrap(cbRes);
 
         document.getElementById("kBalance").textContent = n(account.balance);
@@ -1830,7 +1869,9 @@ def api_champion_challenger_daily(
     min_train_labels: int = Query(default=150, ge=20, le=100000),
     min_cell_labels: int = Query(default=20, ge=1, le=10000),
     challenger_min_confidence: float = Query(default=0.60, ge=0.0, le=1.0),
+    challenger_max_confidence: float = Query(default=1.0, ge=0.0, le=1.0),
     min_daily_selections: int = Query(default=10, ge=1, le=10000),
+    direction: str = Query(default="ALL", pattern="^(ALL|LONG|SHORT)$"),
 ) -> dict:
     return {
         "champion_challenger_daily": service.champion_challenger_daily_report(
@@ -1840,7 +1881,9 @@ def api_champion_challenger_daily(
             min_train_labels=min_train_labels,
             min_cell_labels=min_cell_labels,
             challenger_min_confidence=challenger_min_confidence,
+            challenger_max_confidence=challenger_max_confidence,
             min_daily_selections=min_daily_selections,
+            direction=direction,
         )
     }
 

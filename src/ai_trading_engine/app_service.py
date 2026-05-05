@@ -4245,7 +4245,9 @@ class TradingAppService:
         min_train_labels: int = 150,
         min_cell_labels: int = 20,
         challenger_min_confidence: float = 0.60,
+        challenger_max_confidence: float = 1.0,
         min_daily_selections: int = 10,
+        direction: str = "ALL",
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         labels = build_prediction_labels(
@@ -4255,6 +4257,11 @@ class TradingAppService:
             quality_mode=quality_mode,
             **self._research_label_filters(),
         ).get("labels_by_horizon", {}).get(int(horizon_minutes), [])
+        direction_norm = str(direction or "ALL").strip().upper()
+        if direction_norm in {"LONG", "SHORT"}:
+            labels = [r for r in labels if str(r.get("direction") or "").strip().upper() == direction_norm]
+        conf_max = max(0.0, min(1.0, float(challenger_max_confidence)))
+        conf_min = max(0.0, min(conf_max, float(challenger_min_confidence)))
         by_day: dict[str, list[dict[str, Any]]] = {}
         for r in labels:
             day = str(r.get("timestamp") or "")[:10]
@@ -4303,7 +4310,8 @@ class TradingAppService:
                 )
                 if key in allow:
                     champion_rows.append(r)
-                if float(r.get("confidence", 0.0)) >= float(challenger_min_confidence):
+                conf = float(r.get("confidence", 0.0))
+                if conf >= conf_min and conf <= conf_max:
                     challenger_rows.append(r)
 
             def _agg(selected: list[dict[str, Any]]) -> tuple[int, float, float]:
@@ -4367,7 +4375,9 @@ class TradingAppService:
             "quality_mode": str(quality_mode or "good_only"),
             "min_train_labels": int(min_train_labels),
             "min_cell_labels": int(min_cell_labels),
-            "challenger_min_confidence": float(challenger_min_confidence),
+            "direction": direction_norm,
+            "challenger_min_confidence": float(conf_min),
+            "challenger_max_confidence": float(conf_max),
             "min_daily_selections": int(min_daily_selections),
             "days": out_days,
             "champion_overall": {"count": int(champ_n), "signed_bps": float(champ_signed)},
