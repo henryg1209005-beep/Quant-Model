@@ -585,13 +585,20 @@ def home() -> str:
         </div>
 
         <div id="analyticsQualityPanel" class="analytics-panel span-2">
-          <div class="card span-2">
-            <h3>Prediction Quality</h3>
+
+          <div class="kpi-section">
+            <div class="kpi-section-label">Model Performance</div>
             <div class="kpis">
               <div class="card"><div class="kpi-label">Labelled Predictions</div><div id="qLabels" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Accuracy</div><div id="qAccuracy" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Signed Return</div><div id="qSigned" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Brier Score</div><div id="qBrier" class="kpi-val">-</div></div>
+            </div>
+          </div>
+
+          <div class="kpi-section">
+            <div class="kpi-section-label">Data &amp; Guards</div>
+            <div class="kpis">
               <div class="card"><div class="kpi-label">Samples With Quote</div><div id="qQuote" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Allowed Regime Cells</div><div id="qAllowedCells" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Best-Horizon Symbols</div><div id="qBestHorizonSymbols" class="kpi-val">-</div></div>
@@ -602,32 +609,35 @@ def home() -> str:
               <div class="card"><div class="kpi-label">Calibration Gate</div><div id="qCalGate" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Calib Evaluated</div><div id="qCalEval" class="kpi-val">-</div></div>
             </div>
-            <div class="analytics-grid">
-              <div class="chart-card">
-                <div class="chart-title">Signed Return by Horizon</div>
-                <div id="qualityChart"></div>
-              </div>
-              <div class="chart-card">
-                <div class="chart-title">By Symbol (15m)</div>
-                <div class="table-wrap"><table id="qualitySymbolTable"></table></div>
-              </div>
-              <div class="chart-card">
-                <div class="chart-title">By Confidence Bin (15m)</div>
-                <div class="table-wrap"><table id="qualityConfidenceTable"></table></div>
-              </div>
-              <div class="chart-card">
-                <div class="chart-title">Calibration Gate by Symbol/Bin</div>
-                <div id="qCalSummary" class="small" style="margin:4px 0 8px 0">-</div>
-                <div class="table-wrap"><table id="qualityCalibTable"></table></div>
-              </div>
-              <div class="chart-card">
-                <div class="chart-title">Direction Policy (15m)</div>
-                <div id="qDirectionSummary" class="small" style="margin:4px 0 8px 0">-</div>
-                <div class="table-wrap"><table id="qualityDirectionPolicyTable"></table></div>
-              </div>
-            </div>
-            <div class="small" id="qualityNote" style="margin-top:10px"></div>
           </div>
+
+          <div class="card" style="margin-bottom:10px">
+            <h3>Signed Return by Horizon</h3>
+            <div id="qualityChart"></div>
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <h3>By Symbol (15m)</h3>
+              <div class="table-wrap"><table id="qualitySymbolTable"></table></div>
+            </div>
+            <div class="card">
+              <h3>By Confidence Bin (15m)</h3>
+              <div class="table-wrap"><table id="qualityConfidenceTable"></table></div>
+            </div>
+            <div class="card">
+              <h3>Calibration Gate by Symbol / Bin</h3>
+              <div id="qCalSummary" class="small" style="margin:0 0 8px 0">-</div>
+              <div class="table-wrap"><table id="qualityCalibTable"></table></div>
+            </div>
+            <div class="card">
+              <h3>Direction Policy (15m)</h3>
+              <div id="qDirectionSummary" class="small" style="margin:0 0 8px 0">-</div>
+              <div class="table-wrap"><table id="qualityDirectionPolicyTable"></table></div>
+            </div>
+          </div>
+
+          <div class="small" id="qualityNote" style="margin-top:10px"></div>
         </div>
 
         <div id="analyticsSymbolGatePanel" class="analytics-panel span-2">
