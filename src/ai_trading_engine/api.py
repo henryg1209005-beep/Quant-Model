@@ -53,39 +53,36 @@ def home() -> str:
   <title>Apex .01</title>
   <style>
     :root {
-      --bg: #eef2f5;
-      --text: #111827;
-      --muted: #64748b;
-      --surface: #ffffff;
-      --surface-soft: #f8fafc;
-      --line: #d7dee8;
-      --line-strong: #b7c2d0;
-      --brand: #087f8c;
-      --brand-2: #2563eb;
-      --danger: #b42318;
-      --warn: #b76e00;
-      --ok: #067647;
-      --ink: #0b1220;
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2333;
+      --surface-3: #21262d;
+      --border: #30363d;
+      --border-strong: #484f58;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --dim: #4a5568;
+      --brand: #2dd4bf;
+      --brand-2: #3b82f6;
+      --danger: #f85149;
+      --warn: #d29922;
+      --ok: #3fb950;
+      --ink: #e6edf3;
       --radius: 8px;
-      --shadow: 0 12px 28px rgba(15, 23, 42, 0.09);
-      --shadow-soft: 0 1px 0 rgba(15, 23, 42, 0.05);
+      --shadow: 0 1px 3px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+      --shadow-soft: 0 1px 2px rgba(0,0,0,0.4);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--text);
-      background:
-        linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-        linear-gradient(135deg, #f8fafc 0%, #eef2f5 42%, #e7eef2 100%),
-        var(--bg);
-      background-size: 32px 32px, 32px 32px, auto;
+      background: var(--bg);
       font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
     }
     .app {
       max-width: 1500px;
       margin: 0 auto;
-      padding: 18px;
+      padding: 20px;
     }
     .header {
       display: flex;
@@ -93,26 +90,25 @@ def home() -> str:
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      margin-bottom: 14px;
-      padding: 18px;
-      color: #f8fafc;
-      background:
-        linear-gradient(135deg, rgba(8, 127, 140, 0.94), rgba(11, 18, 32, 0.98)),
-        linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px);
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      margin-bottom: 16px;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid rgba(45, 212, 191, 0.2);
+      border-top: 2px solid var(--brand);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
     }
     h1 {
       margin: 0;
-      font-size: 24px;
-      line-height: 1.05;
+      font-size: 22px;
       font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
     }
     .subtitle {
-      margin: 5px 0 0;
-      color: #cbd5e1;
-      font-size: 13px;
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
     }
     .chips {
       display: flex;
@@ -120,201 +116,229 @@ def home() -> str:
       flex-wrap: wrap;
     }
     .chip {
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
       border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: #e5e7eb;
-      backdrop-filter: blur(8px);
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
     }
-    .chip.ok { border-color: rgba(134, 239, 172, 0.45); background: rgba(6, 118, 71, 0.22); color: #bbf7d0; }
-    .chip.warn { border-color: rgba(253, 230, 138, 0.45); background: rgba(183, 110, 0, 0.24); color: #fde68a; }
-    .chip.danger { border-color: rgba(254, 202, 202, 0.50); background: rgba(180, 35, 24, 0.26); color: #fecaca; }
-
+    .chip.ok    { border-color: rgba(63,185,80,0.45);  background: rgba(63,185,80,0.1);  color: #3fb950; }
+    .chip.warn  { border-color: rgba(210,153,34,0.45); background: rgba(210,153,34,0.1); color: #d29922; }
+    .chip.danger{ border-color: rgba(248,81,73,0.45);  background: rgba(248,81,73,0.1);  color: #f85149; }
     .toolbar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-      gap: 8px;
-      margin-bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
     }
-    .toolbar.secondary {
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      margin-top: -2px;
+    .toolbar-sep {
+      width: 1px;
+      background: var(--border);
+      margin: 0 4px;
+      align-self: stretch;
     }
     button {
-      border: 1px solid rgba(15, 23, 42, 0.10);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 10px 12px;
-      color: #fff;
+      padding: 8px 14px;
       font-weight: 700;
       font-size: 12px;
       cursor: pointer;
-      box-shadow: var(--shadow-soft);
-      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-    }
-    button:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(15, 23, 42, 0.10); }
-    button:active { transform: translateY(0); }
-    button.start { background: var(--brand); }
-    button.stop { background: var(--danger); }
-    button.once { background: var(--brand-2); }
-    button.refresh {
+      transition: all .12s ease;
+      white-space: nowrap;
+      background: var(--surface-2);
       color: var(--text);
-      border-color: var(--line);
-      background: #fff;
     }
-    button.research {
-      color: #182230;
-      border-color: #c9d3df;
-      background: linear-gradient(180deg, #ffffff, #f3f6f9);
-    }
+    button:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    button:active { transform: translateY(0); filter: brightness(0.95); }
+    button.start  { background: rgba(63,185,80,0.15);  border-color: rgba(63,185,80,0.45);  color: #3fb950; }
+    button.stop   { background: rgba(248,81,73,0.15);  border-color: rgba(248,81,73,0.45);  color: #f85149; }
+    button.once   { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.45); color: #3b82f6; }
+    button.refresh{ background: var(--surface-2); border-color: var(--border-strong); color: var(--muted); }
+    button.research { background: var(--surface-2); border-color: var(--border); color: var(--muted); }
+    button.research:hover { border-color: var(--brand); color: var(--brand); filter: none; }
     .flash {
-      min-height: 18px;
-      margin-top: 2px;
-      margin-bottom: 10px;
-      color: var(--muted);
+      min-height: 16px;
+      margin: 4px 0 8px;
+      color: var(--brand);
       font-size: 12px;
+      font-weight: 600;
     }
     .opsline {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 8px;
-      margin-bottom: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 6px;
+      margin-bottom: 14px;
     }
     .opsitem {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.82);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 9px 11px;
-      font-size: 12px;
-      color: #334155;
-      box-shadow: var(--shadow-soft);
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--muted);
     }
-    .opsitem strong { color: #0f172a; }
-    .blocker {
+    .opsitem strong {
+      color: var(--text);
+      font-weight: 600;
       display: block;
-      margin-top: 4px;
-      line-height: 1.25;
+      margin-bottom: 2px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
+    .blocker { display: block; margin-top: 2px; line-height: 1.3; }
     .blocker-label {
       display: inline-block;
       border-radius: 999px;
-      padding: 3px 8px;
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      color: #9a3412;
-      font-weight: 800;
-      margin-bottom: 4px;
+      padding: 2px 8px;
+      background: rgba(210,153,34,0.12);
+      border: 1px solid rgba(210,153,34,0.4);
+      color: #d29922;
+      font-weight: 700;
+      font-size: 10px;
+      margin-bottom: 2px;
     }
     .blocker-detail {
       display: block;
-      color: #475569;
+      color: var(--muted);
+      font-size: 11px;
       overflow-wrap: anywhere;
     }
     .tabs {
       display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 8px;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
     }
     .tabbtn {
-      border: 1px solid #cbd5e1;
+      border: 1px solid transparent;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.86);
-      color: #334155;
-      padding: 8px 14px;
-      font-size: 12px;
-      font-weight: 700;
+      background: transparent;
+      color: var(--muted);
+      padding: 7px 18px;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
+      transition: all .12s ease;
     }
+    .tabbtn:hover { color: var(--text); background: var(--surface-2); }
     .tabbtn.active {
-      background: var(--ink);
-      border-color: var(--ink);
-      color: #fff;
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      color: var(--text);
     }
     .panel { display: none; }
     .panel.active { display: block; }
     .subtabs {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 4px;
+      margin-bottom: 14px;
+      padding: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
     }
     .subtabbtn {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(255, 255, 255, 0.86);
-      color: #334155;
-      padding: 8px 11px;
-      font-size: 12px;
-      font-weight: 800;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
       cursor: pointer;
+      transition: all .12s ease;
     }
+    .subtabbtn:hover { color: var(--text); background: var(--surface-2); }
     .subtabbtn.active {
-      background: #182230;
-      border-color: #182230;
-      color: #fff;
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      color: var(--text);
     }
     .analytics-panel { display: none; }
     .analytics-panel.active { display: block; }
-
+    .kpi-section { margin-bottom: 16px; }
+    .kpi-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--dim);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kpi-section-label::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
     .kpis {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 8px;
     }
     .card {
-      background: rgba(255, 255, 255, 0.92);
-      border: 1px solid var(--line);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
       padding: 14px;
+      box-shadow: var(--shadow-soft);
+      transition: border-color .12s ease;
     }
+    .card:hover { border-color: var(--border-strong); }
     .kpi-label {
-      font-size: 11px;
-      letter-spacing: 0;
+      font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--muted);
-      font-weight: 800;
     }
     .kpi-val {
-      margin-top: 7px;
-      font-size: 20px;
-      font-weight: 800;
+      margin-top: 8px;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--text);
       line-height: 1.15;
     }
-
     .grid {
       display: grid;
       grid-template-columns: 1fr;
       gap: 10px;
     }
     @media (min-width: 980px) {
-      .grid {
-        grid-template-columns: 1fr 1fr;
-      }
+      .grid { grid-template-columns: 1fr 1fr; }
       .span-2 { grid-column: 1 / -1; }
     }
     .card h3 {
       margin: 0 0 12px;
-      font-size: 13px;
-      letter-spacing: 0;
-      color: #182230;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
+      color: var(--muted);
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
     }
     .kv {
       display: grid;
       grid-template-columns: 165px minmax(0, 1fr);
-      gap: 7px 10px;
+      gap: 6px 12px;
       font-size: 12px;
     }
-    .k { color: var(--muted); font-weight: 700; }
+    .k { color: var(--muted); font-weight: 600; }
     .v {
-      border-bottom: 1px solid #edf1f6;
-      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 5px;
       word-break: break-word;
+      color: var(--text);
     }
     .mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -322,9 +346,9 @@ def home() -> str:
     }
     .table-wrap {
       overflow: auto;
-      border: 1px solid var(--line);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      background: #fff;
+      background: var(--surface);
     }
     table {
       width: 100%;
@@ -334,36 +358,38 @@ def home() -> str:
     }
     th, td {
       text-align: left;
-      padding: 9px 10px;
-      border-bottom: 1px solid #eef2f6;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
       vertical-align: top;
     }
     th {
       position: sticky;
       top: 0;
-      background: #f2f5f8;
-      color: #475467;
-      z-index: 1;
-      font-size: 11px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0;
+      letter-spacing: 0.05em;
+      z-index: 1;
     }
-    tr:hover td { background: #fbfcfe; }
+    td { color: var(--text); }
+    tr:hover td { background: var(--surface-2); }
     .badge {
       display: inline-block;
       border-radius: 999px;
-      border: 1px solid #cbd5e1;
-      padding: 3px 8px;
-      font-size: 11px;
+      border: 1px solid var(--border-strong);
+      padding: 2px 8px;
+      font-size: 10px;
       font-weight: 700;
-      background: #f8fafc;
-      color: #334155;
+      background: var(--surface-2);
+      color: var(--muted);
       white-space: nowrap;
     }
-    .b-long { border-color: #86efac; background: #f0fdf4; color: #166534; }
-    .b-short { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-    .b-trade { border-color: #99f6e4; background: #f0fdfa; color: #115e59; }
-    .b-hold { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+    .b-long  { border-color: rgba(63,185,80,0.4);  background: rgba(63,185,80,0.1);  color: #3fb950; }
+    .b-short { border-color: rgba(248,81,73,0.4);  background: rgba(248,81,73,0.1);  color: #f85149; }
+    .b-trade { border-color: rgba(45,212,191,0.4); background: rgba(45,212,191,0.1); color: #2dd4bf; }
+    .b-hold  { border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.1); color: #d29922; }
     .small { color: var(--muted); font-size: 11px; }
     .ellipsis {
       overflow: hidden;
@@ -378,52 +404,44 @@ def home() -> str:
       gap: 10px;
     }
     @media (min-width: 980px) {
-      .analytics-grid {
-        grid-template-columns: 1fr 1fr 1fr;
-      }
+      .analytics-grid { grid-template-columns: 1fr 1fr 1fr; }
     }
     .chart-card {
-      border: 1px solid var(--line);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      background: linear-gradient(180deg, #ffffff, #f8fafc);
-      padding: 12px;
-      box-shadow: var(--shadow-soft);
+      background: var(--surface);
+      padding: 14px;
     }
     .chart-title {
-      font-size: 12px;
-      color: #182230;
-      margin-bottom: 8px;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 10px;
     }
     .chart-svg {
       width: 100%;
       height: 230px;
       display: block;
-      background:
-        linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-        #ffffff;
-      background-size: 26px 26px;
-      border: 1px solid #e2e8f0;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
     }
     .chart-empty {
       font-size: 12px;
-      color: #64748b;
-      padding: 72px 8px;
+      color: var(--muted);
+      padding: 64px 8px;
       text-align: center;
-      background: #f8fafc;
-      border: 1px dashed var(--line-strong);
+      background: var(--surface-2);
+      border: 1px dashed var(--border-strong);
       border-radius: var(--radius);
     }
     @media (max-width: 720px) {
-      .app { padding: 10px; }
-      .header { padding: 14px; }
-      h1 { font-size: 21px; }
-      .toolbar, .toolbar.secondary { grid-template-columns: 1fr 1fr; }
+      .app { padding: 12px; }
+      h1 { font-size: 20px; }
+      .toolbar { flex-wrap: wrap; }
       .kv { grid-template-columns: 1fr; }
-      .k { padding-top: 4px; }
       .tabs { overflow: auto; }
     }
   </style>
@@ -432,8 +450,8 @@ def home() -> str:
   <div class="app">
     <div class="header">
       <div>
-        <h1>Apex .01</h1>
-        <p class="subtitle">Operational dashboard for status, risk gates, execution, audit trail, and visual analytics</p>
+        <h1>Apex <span style="color:var(--brand)">.01</span></h1>
+        <p class="subtitle">AI trading engine &middot; status, risk gates, execution, audit &amp; analytics</p>
       </div>
       <div class="chips">
         <div id="chipWorker" class="chip">Worker: -</div>
@@ -443,24 +461,23 @@ def home() -> str:
     </div>
 
     <div class="toolbar">
-      <button class="start" onclick="post('/api/start', 'Start requested')">Start Worker</button>
-      <button class="stop" onclick="post('/api/stop', 'Stop requested')">Stop Worker</button>
-      <button class="once" onclick="post('/api/run-once', 'Single cycle requested')">Run One Cycle</button>
-      <button class="refresh" onclick="refreshAll()">Refresh Now</button>
-    </div>
-    <div class="toolbar secondary">
-      <button class="research" onclick="runResearch('/api/retrain?lookback=5000', 'Retrain triggered')">Run Retrain</button>
-      <button class="research" onclick="runResearch('/api/research/walk-forward?lookback=10000&folds=4&min_train=40&min_test=20&bins=10', 'Walk-forward report generated')">Run Walk-Forward</button>
-      <button class="research" onclick="runResearch('/api/research/predictive?lookback=10000&folds=4&min_train=40&min_test=20&n_estimators=80&learning_rate=0.1&max_bins=16', 'Predictive report generated')">Run Predictive Research</button>
-      <button class="research" onclick="setAccelerationMode('standard')">Mode: Standard</button>
-      <button class="research" onclick="setAccelerationMode('accelerated')">Mode: Accelerated</button>
+      <button class="start" onclick="post('/api/start', 'Start requested')">&#9654; Start Worker</button>
+      <button class="stop" onclick="post('/api/stop', 'Stop requested')">&#9646; Stop Worker</button>
+      <button class="once" onclick="post('/api/run-once', 'Single cycle requested')">&#8635; Run Once</button>
+      <button class="refresh" onclick="refreshAll()">&#8635; Refresh</button>
+      <div class="toolbar-sep"></div>
+      <button class="research" onclick="runResearch('/api/retrain?lookback=5000', 'Retrain triggered')">Retrain</button>
+      <button class="research" onclick="runResearch('/api/research/walk-forward?lookback=10000&folds=4&min_train=40&min_test=20&bins=10', 'Walk-forward report generated')">Walk-Forward</button>
+      <button class="research" onclick="runResearch('/api/research/predictive?lookback=10000&folds=4&min_train=40&min_test=20&n_estimators=80&learning_rate=0.1&max_bins=16', 'Predictive research generated')">Predictive Research</button>
+      <button class="research" onclick="setAccelerationMode('standard')">Standard Mode</button>
+      <button class="research" onclick="setAccelerationMode('accelerated')">Accelerated Mode</button>
     </div>
     <div id="flash" class="flash"></div>
     <div class="opsline">
-      <div class="opsitem"><strong>Last Refresh:</strong> <span id="opsRefresh">-</span></div>
-      <div class="opsitem"><strong>NY Session:</strong> <span id="opsSession">-</span></div>
-      <div class="opsitem"><strong>Current Blocker:</strong> <span id="opsBlocker" class="blocker">-</span></div>
-      <div class="opsitem"><strong>System Health:</strong> <span id="opsHealth">-</span></div>
+      <div class="opsitem"><strong>Last Refresh</strong> <span id="opsRefresh">-</span></div>
+      <div class="opsitem"><strong>NY Session</strong> <span id="opsSession">-</span></div>
+      <div class="opsitem"><strong>Blocker</strong> <span id="opsBlocker" class="blocker">-</span></div>
+      <div class="opsitem"><strong>System Health</strong> <span id="opsHealth">-</span></div>
     </div>
     <div class="tabs">
       <button id="tabOverviewBtn" class="tabbtn active" onclick="showTab('overview')">Overview</button>
@@ -468,194 +485,214 @@ def home() -> str:
     </div>
 
     <div id="panelOverview" class="panel active">
-    <div class="kpis">
-      <div class="card"><div class="kpi-label">Balance</div><div id="kBalance" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Daily PnL</div><div id="kPnl" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Trades Today</div><div id="kTradesToday" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Open Position</div><div id="kOpenPos" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Trade Count</div><div id="kTradeCount" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Win Rate</div><div id="kWinRate" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Profit Factor</div><div id="kPf" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Cycles</div><div id="kCycles" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Latest Note</div><div id="kNote" class="kpi-val" style="font-size:0.92rem">-</div></div>
-      <div class="card"><div class="kpi-label">Autonomy Health</div><div id="kAutonomyHealth" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Data Readiness</div><div id="kDataReadiness" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Data Pace (1h)</div><div id="kDataPace" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Projected Daily Samples</div><div id="kProjSamples" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Top Error Cause</div><div id="kTopCause" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">LLM Provider Health</div><div id="kLlmHealth" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Weekly Experiment</div><div id="kWeeklyExp" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Auto Promotion Gate</div><div id="kAutoPromoGate" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">Sample Flow Guard</div><div id="kSampleFlowGuard" class="kpi-val">-</div></div>
-      <div class="card"><div class="kpi-label">7D Sprint</div><div id="kSprint7d" class="kpi-val">-</div></div>
-    </div>
 
-    <div class="grid">
-      <div class="card">
-        <h3>Status</h3>
-        <div id="statusKV" class="kv"></div>
-      </div>
-      <div class="card">
-        <h3>Runtime Config</h3>
-        <div id="configKV" class="kv"></div>
+      <div class="kpi-section">
+        <div class="kpi-section-label">Trading</div>
+        <div class="kpis">
+          <div class="card"><div class="kpi-label">Balance</div><div id="kBalance" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Daily PnL</div><div id="kPnl" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Trades Today</div><div id="kTradesToday" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Open Position</div><div id="kOpenPos" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Trade Count</div><div id="kTradeCount" class="kpi-val">-</div></div>
+        </div>
       </div>
 
-      <div class="card">
-        <h3>Account</h3>
-        <div id="accountKV" class="kv"></div>
-      </div>
-      <div class="card">
-        <h3>Go-Live Gate</h3>
-        <div id="goLiveKV" class="kv"></div>
+      <div class="kpi-section">
+        <div class="kpi-section-label">Performance</div>
+        <div class="kpis">
+          <div class="card"><div class="kpi-label">Win Rate</div><div id="kWinRate" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Profit Factor</div><div id="kPf" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Cycles</div><div id="kCycles" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Latest Note</div><div id="kNote" class="kpi-val" style="font-size:0.85rem">-</div></div>
+        </div>
       </div>
 
-      <div class="card span-2">
-        <h3>Performance Metrics</h3>
-        <div id="metricsKV" class="kv"></div>
+      <div class="kpi-section">
+        <div class="kpi-section-label">Data &amp; Health</div>
+        <div class="kpis">
+          <div class="card"><div class="kpi-label">Autonomy Health</div><div id="kAutonomyHealth" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Data Readiness</div><div id="kDataReadiness" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Data Pace (1h)</div><div id="kDataPace" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Projected Daily Samples</div><div id="kProjSamples" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">LLM Provider Health</div><div id="kLlmHealth" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Top Error Cause</div><div id="kTopCause" class="kpi-val">-</div></div>
+        </div>
       </div>
-    </div>
+
+      <div class="kpi-section">
+        <div class="kpi-section-label">System</div>
+        <div class="kpis">
+          <div class="card"><div class="kpi-label">Weekly Experiment</div><div id="kWeeklyExp" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Auto Promotion Gate</div><div id="kAutoPromoGate" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">Sample Flow Guard</div><div id="kSampleFlowGuard" class="kpi-val">-</div></div>
+          <div class="card"><div class="kpi-label">7D Sprint</div><div id="kSprint7d" class="kpi-val">-</div></div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Status</h3>
+          <div id="statusKV" class="kv"></div>
+        </div>
+        <div class="card">
+          <h3>Runtime Config</h3>
+          <div id="configKV" class="kv"></div>
+        </div>
+        <div class="card">
+          <h3>Account</h3>
+          <div id="accountKV" class="kv"></div>
+        </div>
+        <div class="card">
+          <h3>Go-Live Gate</h3>
+          <div id="goLiveKV" class="kv"></div>
+        </div>
+        <div class="card span-2">
+          <h3>Performance Metrics</h3>
+          <div id="metricsKV" class="kv"></div>
+        </div>
+      </div>
     </div>
 
     <div id="panelAnalytics" class="panel">
-    <div class="subtabs">
-      <button id="subtabChartsBtn" class="subtabbtn active" onclick="showAnalyticsSubtab('charts')">Charts</button>
-      <button id="subtabQualityBtn" class="subtabbtn" onclick="showAnalyticsSubtab('quality')">Prediction Quality</button>
-      <button id="subtabSymbolGateBtn" class="subtabbtn" onclick="showAnalyticsSubtab('symbolGate')">Symbol Gate</button>
-      <button id="subtabCCBtn" class="subtabbtn" onclick="showAnalyticsSubtab('cc')">Champion vs Challenger</button>
-      <button id="subtabDecisionsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('decisions')">Decisions</button>
-      <button id="subtabTradesBtn" class="subtabbtn" onclick="showAnalyticsSubtab('trades')">Trades</button>
-      <button id="subtabEventsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('events')">Events</button>
-    </div>
-    <div class="grid">
-      <div id="analyticsChartsPanel" class="analytics-panel active span-2">
-      <div class="card span-2">
-        <h3>Charts</h3>
-        <div class="analytics-grid">
-          <div class="chart-card">
-            <div class="chart-title">Equity Curve (Recent Closed Trades)</div>
-            <div id="eqChart"></div>
+      <div class="subtabs">
+        <button id="subtabChartsBtn" class="subtabbtn active" onclick="showAnalyticsSubtab('charts')">Charts</button>
+        <button id="subtabQualityBtn" class="subtabbtn" onclick="showAnalyticsSubtab('quality')">Prediction Quality</button>
+        <button id="subtabSymbolGateBtn" class="subtabbtn" onclick="showAnalyticsSubtab('symbolGate')">Symbol Gate</button>
+        <button id="subtabCCBtn" class="subtabbtn" onclick="showAnalyticsSubtab('cc')">Champion vs Challenger</button>
+        <button id="subtabDecisionsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('decisions')">Decisions</button>
+        <button id="subtabTradesBtn" class="subtabbtn" onclick="showAnalyticsSubtab('trades')">Trades</button>
+        <button id="subtabEventsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('events')">Events</button>
+      </div>
+      <div class="grid">
+        <div id="analyticsChartsPanel" class="analytics-panel active span-2">
+          <div class="card span-2">
+            <h3>Charts</h3>
+            <div class="analytics-grid">
+              <div class="chart-card">
+                <div class="chart-title">Equity Curve</div>
+                <div id="eqChart"></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">PnL Distribution</div>
+                <div id="pnlHist"></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Decision Mix</div>
+                <div id="decMix"></div>
+              </div>
+            </div>
           </div>
-          <div class="chart-card">
-            <div class="chart-title">PnL Distribution</div>
-            <div id="pnlHist"></div>
+        </div>
+
+        <div id="analyticsQualityPanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Prediction Quality</h3>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Labelled Predictions</div><div id="qLabels" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Accuracy</div><div id="qAccuracy" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Signed Return</div><div id="qSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Brier Score</div><div id="qBrier" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Samples With Quote</div><div id="qQuote" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Allowed Regime Cells</div><div id="qAllowedCells" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Best-Horizon Symbols</div><div id="qBestHorizonSymbols" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Sample Skip Rate</div><div id="qSampleSkipRate" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Coverage Guard</div><div id="qCoverageGuard" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Policy Tier</div><div id="qPolicyTier" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Symbol Quarantine</div><div id="qSymbolQuarantine" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Calibration Gate</div><div id="qCalGate" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Calib Evaluated</div><div id="qCalEval" class="kpi-val">-</div></div>
+            </div>
+            <div class="analytics-grid">
+              <div class="chart-card">
+                <div class="chart-title">Signed Return by Horizon</div>
+                <div id="qualityChart"></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">By Symbol (15m)</div>
+                <div class="table-wrap"><table id="qualitySymbolTable"></table></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">By Confidence Bin (15m)</div>
+                <div class="table-wrap"><table id="qualityConfidenceTable"></table></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Calibration Gate by Symbol/Bin</div>
+                <div id="qCalSummary" class="small" style="margin:4px 0 8px 0">-</div>
+                <div class="table-wrap"><table id="qualityCalibTable"></table></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Direction Policy (15m)</div>
+                <div id="qDirectionSummary" class="small" style="margin:4px 0 8px 0">-</div>
+                <div class="table-wrap"><table id="qualityDirectionPolicyTable"></table></div>
+              </div>
+            </div>
+            <div class="small" id="qualityNote" style="margin-top:10px"></div>
           </div>
-          <div class="chart-card">
-            <div class="chart-title">Decision Mix</div>
-            <div id="decMix"></div>
+        </div>
+
+        <div id="analyticsSymbolGatePanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Symbol Gate</h3>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Allowed Symbols</div><div id="sgAllowed" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Blocked Symbols</div><div id="sgBlocked" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Horizon</div><div id="sgHorizon" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Robust Cells</div><div id="sgRobustCells" class="kpi-val">-</div></div>
+            </div>
+            <div class="table-wrap"><table id="symbolGateTable"></table></div>
+            <div class="chart-title" style="margin-top:12px;margin-bottom:8px">Robust Cell Leaderboard (CI95 low &gt; 0)</div>
+            <div class="table-wrap"><table id="cellBootstrapTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsCcPanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Champion vs Challenger (Daily OOS)</h3>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Champion Signed bps</div><div id="ccChampSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Challenger Signed bps</div><div id="ccChallSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Delta Signed bps</div><div id="ccDeltaSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">CI95 (delta)</div><div id="ccCi95" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Significance</div><div id="ccSig" class="kpi-val">-</div></div>
+            </div>
+            <div class="table-wrap"><table id="ccTable"></table></div>
+            <h3 style="margin-top:16px;border-bottom:0;padding-bottom:0">Short Challenger Slice (Daily OOS)</h3>
+            <div class="kpis" style="margin-top:10px">
+              <div class="card"><div class="kpi-label">Short Champ bps</div><div id="ccShortChampSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Short Chall bps</div><div id="ccShortChallSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Short Delta bps</div><div id="ccShortDeltaSigned" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Short CI95</div><div id="ccShortCi95" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Short Significance</div><div id="ccShortSig" class="kpi-val">-</div></div>
+            </div>
+            <div class="table-wrap"><table id="ccShortTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsDecisionsPanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Recent Decisions</h3>
+            <div class="table-wrap"><table id="decisionsTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsTradesPanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Closed Trades</h3>
+            <div class="table-wrap"><table id="tradesTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsEventsPanel" class="analytics-panel span-2">
+          <div class="card span-2">
+            <h3>Audit Events</h3>
+            <div class="table-wrap"><table id="auditTable"></table></div>
+          </div>
+          <div class="card span-2" style="margin-top:10px">
+            <h3>Notifications</h3>
+            <div class="table-wrap"><table id="notificationsTable"></table></div>
           </div>
         </div>
       </div>
-      </div>
-
-      <div id="analyticsQualityPanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Prediction Quality</h3>
-        <div class="kpis">
-          <div class="card"><div class="kpi-label">Labelled Predictions</div><div id="qLabels" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Accuracy</div><div id="qAccuracy" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Signed Return</div><div id="qSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Brier Score</div><div id="qBrier" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Samples With Quote</div><div id="qQuote" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Allowed Regime Cells</div><div id="qAllowedCells" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Best-Horizon Symbols</div><div id="qBestHorizonSymbols" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Sample Skip Rate</div><div id="qSampleSkipRate" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Coverage Guard</div><div id="qCoverageGuard" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Policy Tier</div><div id="qPolicyTier" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Symbol Quarantine</div><div id="qSymbolQuarantine" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Calibration Gate</div><div id="qCalGate" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Calib Evaluated</div><div id="qCalEval" class="kpi-val">-</div></div>
-        </div>
-        <div class="analytics-grid">
-          <div class="chart-card">
-            <div class="chart-title">Signed Return by Horizon</div>
-            <div id="qualityChart"></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">By Symbol (15m)</div>
-            <div class="table-wrap"><table id="qualitySymbolTable"></table></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">By Confidence Bin (15m)</div>
-            <div class="table-wrap"><table id="qualityConfidenceTable"></table></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">Calibration Gate by Symbol/Bin</div>
-            <div id="qCalSummary" class="small" style="margin:4px 0 8px 0">-</div>
-            <div class="table-wrap"><table id="qualityCalibTable"></table></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">Direction Policy (15m)</div>
-            <div id="qDirectionSummary" class="small" style="margin:4px 0 8px 0">-</div>
-            <div class="table-wrap"><table id="qualityDirectionPolicyTable"></table></div>
-          </div>
-        </div>
-        <div class="small" id="qualityNote" style="margin-top:10px"></div>
-      </div>
-      </div>
-
-      <div id="analyticsSymbolGatePanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Symbol Gate</h3>
-        <div class="kpis">
-          <div class="card"><div class="kpi-label">Allowed Symbols</div><div id="sgAllowed" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Blocked Symbols</div><div id="sgBlocked" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Horizon</div><div id="sgHorizon" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Robust Cells</div><div id="sgRobustCells" class="kpi-val">-</div></div>
-        </div>
-        <div class="table-wrap"><table id="symbolGateTable"></table></div>
-        <div class="chart-title" style="margin-top:10px">Robust Cell Leaderboard (CI95 low > 0)</div>
-        <div class="table-wrap"><table id="cellBootstrapTable"></table></div>
-      </div>
-      </div>
-
-      <div id="analyticsCcPanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Champion vs Challenger (Daily OOS)</h3>
-        <div class="kpis">
-          <div class="card"><div class="kpi-label">Champion Signed bps</div><div id="ccChampSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Challenger Signed bps</div><div id="ccChallSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Delta Signed bps</div><div id="ccDeltaSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">CI95 (delta)</div><div id="ccCi95" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Significance</div><div id="ccSig" class="kpi-val">-</div></div>
-        </div>
-        <div class="table-wrap"><table id="ccTable"></table></div>
-        <h3 style="margin-top:14px">Short Challenger Slice (Daily OOS)</h3>
-        <div class="kpis">
-          <div class="card"><div class="kpi-label">Short Champ bps</div><div id="ccShortChampSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Short Chall bps</div><div id="ccShortChallSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Short Delta bps</div><div id="ccShortDeltaSigned" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Short CI95</div><div id="ccShortCi95" class="kpi-val">-</div></div>
-          <div class="card"><div class="kpi-label">Short Significance</div><div id="ccShortSig" class="kpi-val">-</div></div>
-        </div>
-        <div class="table-wrap"><table id="ccShortTable"></table></div>
-      </div>
-      </div>
-
-      <div id="analyticsDecisionsPanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Recent Decisions</h3>
-        <div class="table-wrap"><table id="decisionsTable"></table></div>
-      </div>
-      </div>
-
-      <div id="analyticsTradesPanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Closed Trades</h3>
-        <div class="table-wrap"><table id="tradesTable"></table></div>
-      </div>
-      </div>
-
-      <div id="analyticsEventsPanel" class="analytics-panel span-2">
-      <div class="card span-2">
-        <h3>Audit Events</h3>
-        <div class="table-wrap"><table id="auditTable"></table></div>
-      </div>
-      <div class="card span-2">
-        <h3>Notifications</h3>
-        <div class="table-wrap"><table id="notificationsTable"></table></div>
-      </div>
-      </div>
-    </div>
     </div>
   </div>
 
@@ -891,10 +928,10 @@ def home() -> str:
       const baseY = toY(0);
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#374151" stroke-width="1"/>
           <polyline points="${poly}" fill="none" stroke="#0ea5e9" stroke-width="2"/>
-          <text x="${padX}" y="12" font-size="10" fill="#475569">max ${n(yHi, 2)}</text>
-          <text x="${padX}" y="${height - 4}" font-size="10" fill="#475569">min ${n(yLo, 2)}</text>
+          <text x="${padX}" y="12" font-size="10" fill="#7d8590">max ${n(yHi, 2)}</text>
+          <text x="${padX}" y="${height - 4}" font-size="10" fill="#7d8590">min ${n(yLo, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("eqChart");
@@ -932,10 +969,10 @@ def home() -> str:
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#cbd5e1" stroke-width="1"/>
+          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#374151" stroke-width="1"/>
           ${rects}
-          <text x="${pad}" y="12" font-size="10" fill="#475569">min ${n(minV, 2)}</text>
-          <text x="${width - pad - 70}" y="12" font-size="10" fill="#475569">max ${n(maxV, 2)}</text>
+          <text x="${pad}" y="12" font-size="10" fill="#7d8590">min ${n(minV, 2)}</text>
+          <text x="${width - pad - 70}" y="12" font-size="10" fill="#7d8590">max ${n(maxV, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("pnlHist");
@@ -980,15 +1017,15 @@ def home() -> str:
         const y = baseline - h;
         return `
           <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${b.color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="${baseline + 14}" text-anchor="middle" font-size="10" fill="#475569">${b.label}</text>
-          <text x="${x + (barW / 2)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#334155">${b.value}</text>
+          <text x="${x + (barW / 2)}" y="${baseline + 14}" text-anchor="middle" font-size="10" fill="#7d8590">${b.label}</text>
+          <text x="${x + (barW / 2)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#a0aec0">${b.value}</text>
         `;
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="50" y1="${baseline}" x2="${width - 30}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
+          <line x1="50" y1="${baseline}" x2="${width - 30}" y2="${baseline}" stroke="#374151" stroke-width="1"/>
           ${rects}
-          <text x="16" y="12" font-size="10" fill="#475569">n=${rows.length}</text>
+          <text x="16" y="12" font-size="10" fill="#7d8590">n=${rows.length}</text>
         </svg>
       `;
       const el = document.getElementById("decMix");
@@ -1045,16 +1082,16 @@ def home() -> str:
         const color = h.signed >= 0 ? "#16a34a" : "#dc2626";
         return `
           <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="164" text-anchor="middle" font-size="10" fill="#475569">${h.horizon}m</text>
-          <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#334155">${n(h.signed, 1)}</text>
-          <text x="${x + (barW / 2)}" y="176" text-anchor="middle" font-size="9" fill="#64748b">n=${h.count} ${pct(h.accuracy)}</text>
+          <text x="${x + (barW / 2)}" y="164" text-anchor="middle" font-size="10" fill="#7d8590">${h.horizon}m</text>
+          <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#a0aec0">${n(h.signed, 1)}</text>
+          <text x="${x + (barW / 2)}" y="176" text-anchor="middle" font-size="9" fill="#7d8590">n=${h.count} ${pct(h.accuracy)}</text>
         `;
       }).join("");
       const el = document.getElementById("qualityChart");
       if (el) {
         el.innerHTML = `
           <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-            <line x1="28" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
+            <line x1="28" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#374151" stroke-width="1"/>
             ${bars}
           </svg>
         `;
