@@ -557,6 +557,9 @@ def home() -> str:
       <div class="subtabs">
         <button id="subtabChartsBtn" class="subtabbtn active" onclick="showAnalyticsSubtab('charts')">Charts</button>
         <button id="subtabQualityBtn" class="subtabbtn" onclick="showAnalyticsSubtab('quality')">Prediction Quality</button>
+        <button id="subtabInventoryBtn" class="subtabbtn" onclick="showAnalyticsSubtab('inventory')">Feature Inventory</button>
+        <button id="subtabPatternsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('patterns')">Pattern Leaderboard</button>
+        <button id="subtabContextBtn" class="subtabbtn" onclick="showAnalyticsSubtab('context')">Context Leaderboard</button>
         <button id="subtabSymbolGateBtn" class="subtabbtn" onclick="showAnalyticsSubtab('symbolGate')">Symbol Gate</button>
         <button id="subtabCCBtn" class="subtabbtn" onclick="showAnalyticsSubtab('cc')">Champion vs Challenger</button>
         <button id="subtabDecisionsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('decisions')">Decisions</button>
@@ -644,6 +647,58 @@ def home() -> str:
           </div>
 
           <div class="small" id="qualityNote" style="margin-top:10px"></div>
+        </div>
+
+        <div id="analyticsInventoryPanel" class="analytics-panel span-2">
+          <div class="kpi-section">
+            <div class="kpi-section-label">Feature Inventory</div>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Tracked Features</div><div id="fiFeatureCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Rows Scanned</div><div id="fiSampleCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Core Features</div><div id="fiCoreCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Pattern Features</div><div id="fiPatternCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Structure Features</div><div id="fiStructureCount" class="kpi-val">-</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Features</h3>
+            <div id="fiSummary" class="small" style="margin:0 0 8px 0">-</div>
+            <div class="table-wrap"><table id="featureInventoryTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsPatternsPanel" class="analytics-panel span-2">
+          <div class="kpi-section">
+            <div class="kpi-section-label">Pattern Leaderboard</div>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Allowed Pattern States</div><div id="plAllowedCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Stress Bps</div><div id="plStressBps" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Min Accuracy</div><div id="plMinAccuracy" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Min Labels</div><div id="plMinLabels" class="kpi-val">-</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Pattern States</h3>
+            <div id="plSummary" class="small" style="margin:0 0 8px 0">-</div>
+            <div class="table-wrap"><table id="patternLeaderboardTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsContextPanel" class="analytics-panel span-2">
+          <div class="kpi-section">
+            <div class="kpi-section-label">Context Leaderboard</div>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Allowed Context States</div><div id="clAllowedCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Stress Bps</div><div id="clStressBps" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Min Accuracy</div><div id="clMinAccuracy" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Min Labels</div><div id="clMinLabels" class="kpi-val">-</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Context States</h3>
+            <div id="clSummary" class="small" style="margin:0 0 8px 0">-</div>
+            <div class="table-wrap"><table id="contextLeaderboardTable"></table></div>
+          </div>
         </div>
 
         <div id="analyticsSymbolGatePanel" class="analytics-panel span-2">
@@ -787,7 +842,7 @@ def home() -> str:
       if (b2) b2.className = overview ? "tabbtn" : "tabbtn active";
     }
     function showAnalyticsSubtab(tab) {
-      const names = ["charts", "quality", "symbolGate", "cc", "decisions", "trades", "events"];
+      const names = ["charts", "quality", "inventory", "patterns", "context", "symbolGate", "cc", "decisions", "trades", "events"];
       for (const name of names) {
         const panel = document.getElementById(`analytics${name[0].toUpperCase()}${name.slice(1)}Panel`);
         const btn = document.getElementById(`subtab${name[0].toUpperCase()}${name.slice(1)}Btn`);
@@ -1085,22 +1140,22 @@ def home() -> str:
         return;
       }
       const width = 520;
-      const height = 180;
-      const baseline = 92;
+      const height = 220;
+      const baseline = 118;
       const maxAbs = Math.max(1, ...entries.map((h) => Math.abs(h.signed)));
       const barW = Math.max(32, Math.min(76, 320 / Math.max(1, entries.length)));
       const gap = 28;
       const x0 = Math.max(34, (width - ((barW + gap) * entries.length)) / 2);
       const bars = entries.map((h, i) => {
-        const mag = Math.abs(h.signed) / maxAbs * 62;
+        const mag = Math.abs(h.signed) / maxAbs * 95;
         const x = x0 + i * (barW + gap);
         const y = h.signed >= 0 ? baseline - mag : baseline;
         const color = h.signed >= 0 ? "#16a34a" : "#dc2626";
         return `
-          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="164" text-anchor="middle" font-size="10" fill="#7d8590">${h.horizon}m</text>
+          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(3, mag)}" fill="${color}" opacity="0.88"/>
+          <text x="${x + (barW / 2)}" y="192" text-anchor="middle" font-size="10" fill="#7d8590">${h.horizon}m</text>
           <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#a0aec0">${n(h.signed, 1)}</text>
-          <text x="${x + (barW / 2)}" y="176" text-anchor="middle" font-size="9" fill="#7d8590">n=${h.count} ${pct(h.accuracy)}</text>
+          <text x="${x + (barW / 2)}" y="207" text-anchor="middle" font-size="9" fill="#7d8590">n=${h.count} ${pct(h.accuracy)}</text>
         `;
       }).join("");
       const el = document.getElementById("qualityChart");
@@ -1258,6 +1313,109 @@ def home() -> str:
       el.innerHTML = `
         <thead><tr><th>Symbol</th><th>Direction</th><th>N</th><th>Accuracy</th><th>Signed Bps</th><th>Stressed Bps</th><th>Status</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="7" class="small">No direction policy history yet</td></tr>'}</tbody>
+      `;
+    }
+    function renderPatternLeaderboard(report) {
+      const pl = (report || {}).pattern_leaderboard || {};
+      document.getElementById("plAllowedCount").textContent = n(pl.allowed_count, 0);
+      document.getElementById("plStressBps").textContent = `${n(pl.stress_bps, 2)} bps`;
+      document.getElementById("plMinAccuracy").textContent = pct(pl.min_accuracy);
+      document.getElementById("plMinLabels").textContent = n(pl.min_labels, 0);
+      const rows = pl.top || pl.rows || [];
+      const summaryEl = document.getElementById("plSummary");
+      const topAllowed = (pl.allowed || [])[0];
+      if (summaryEl) {
+        summaryEl.textContent = topAllowed
+          ? `Best allowed: ${topAllowed.symbol} ${topAllowed.direction} ${n(topAllowed.horizon_minutes, 0)}m | ${topAllowed.feature}=${topAllowed.value} | stressed=${n(topAllowed.stressed_signed_bps, 2)} bps | acc=${pct(topAllowed.accuracy)} | n=${n(topAllowed.count, 0)}`
+          : "No allowed pattern states yet. Older samples may still be missing pattern metadata.";
+      }
+      const el = document.getElementById("patternLeaderboardTable");
+      if (!el) return;
+      const body = rows.map((r) => `
+        <tr>
+          <td>${r.symbol || "-"}</td>
+          <td>${r.direction || "-"}</td>
+          <td>${n(r.horizon_minutes, 0)}m</td>
+          <td>${r.feature || "-"}</td>
+          <td>${r.value || "-"}</td>
+          <td>${n(r.count, 0)}</td>
+          <td>${pct(r.accuracy)}</td>
+          <td>${n(r.avg_signed_return_bps, 2)}</td>
+          <td>${n(r.stressed_signed_bps, 2)}</td>
+          <td>${badge(r.status || "-", r.status === "allow" ? "b-long" : (r.status === "block" ? "b-short" : "b-hold"))}</td>
+        </tr>
+      `).join("");
+      el.innerHTML = `
+        <thead><tr><th>Symbol</th><th>Dir</th><th>Horizon</th><th>Feature</th><th>Value</th><th>N</th><th>Accuracy</th><th>Signed bps</th><th>Stressed bps</th><th>Status</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="10" class="small">No pattern leaderboard rows yet</td></tr>'}</tbody>
+      `;
+    }
+    function renderFeatureInventory(report) {
+      const fi = (report || {}).feature_inventory || {};
+      document.getElementById("fiFeatureCount").textContent = n(fi.feature_count, 0);
+      document.getElementById("fiSampleCount").textContent = n(fi.sample_count, 0);
+      const byCat = fi.by_category || {};
+      document.getElementById("fiCoreCount").textContent = n(byCat.core, 0);
+      document.getElementById("fiPatternCount").textContent = n(byCat.pattern, 0);
+      document.getElementById("fiStructureCount").textContent = n(byCat.structure, 0);
+      const items = fi.items || [];
+      const fullyCovered = items.filter((x) => Number(x.coverage_pct || 0) >= 95).length;
+      const summaryEl = document.getElementById("fiSummary");
+      if (summaryEl) {
+        summaryEl.textContent = `${n(fullyCovered, 0)} / ${n(items.length, 0)} features have at least 95% populated coverage. Unknown-heavy fields usually indicate older pre-feature samples.`;
+      }
+      const el = document.getElementById("featureInventoryTable");
+      if (!el) return;
+      const body = items.map((r) => `
+        <tr>
+          <td>${r.category || "-"}</td>
+          <td>${r.label || r.feature || "-"}</td>
+          <td>${r.feature || "-"}</td>
+          <td>${r.kind || "-"}</td>
+          <td>${n(r.present_count, 0)}</td>
+          <td>${n(r.unknown_count, 0)}</td>
+          <td>${n(r.coverage_pct, 1)}%</td>
+          <td>${(r.examples || []).join(", ") || "-"}</td>
+        </tr>
+      `).join("");
+      el.innerHTML = `
+        <thead><tr><th>Category</th><th>Label</th><th>Feature</th><th>Type</th><th>Present</th><th>Unknown</th><th>Coverage</th><th>Examples</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="8" class="small">No feature inventory yet</td></tr>'}</tbody>
+      `;
+    }
+    function renderContextLeaderboard(report) {
+      const cl = (report || {}).context_leaderboard || {};
+      document.getElementById("clAllowedCount").textContent = n(cl.allowed_count, 0);
+      document.getElementById("clStressBps").textContent = `${n(cl.stress_bps, 2)} bps`;
+      document.getElementById("clMinAccuracy").textContent = pct(cl.min_accuracy);
+      document.getElementById("clMinLabels").textContent = n(cl.min_labels, 0);
+      const rows = cl.top || cl.rows || [];
+      const summaryEl = document.getElementById("clSummary");
+      const topAllowed = (cl.allowed || [])[0];
+      if (summaryEl) {
+        summaryEl.textContent = topAllowed
+          ? `Best allowed: ${topAllowed.symbol} ${topAllowed.direction} ${n(topAllowed.horizon_minutes, 0)}m | ${topAllowed.feature}=${topAllowed.value} | stressed=${n(topAllowed.stressed_signed_bps, 2)} bps | acc=${pct(topAllowed.accuracy)} | n=${n(topAllowed.count, 0)}`
+          : "No allowed context states yet. Fresh labelled samples are needed for the new structure fields.";
+      }
+      const el = document.getElementById("contextLeaderboardTable");
+      if (!el) return;
+      const body = rows.map((r) => `
+        <tr>
+          <td>${r.symbol || "-"}</td>
+          <td>${r.direction || "-"}</td>
+          <td>${n(r.horizon_minutes, 0)}m</td>
+          <td>${r.feature || "-"}</td>
+          <td>${r.value || "-"}</td>
+          <td>${n(r.count, 0)}</td>
+          <td>${pct(r.accuracy)}</td>
+          <td>${n(r.avg_signed_return_bps, 2)}</td>
+          <td>${n(r.stressed_signed_bps, 2)}</td>
+          <td>${badge(r.status || "-", r.status === "allow" ? "b-long" : (r.status === "block" ? "b-short" : "b-hold"))}</td>
+        </tr>
+      `).join("");
+      el.innerHTML = `
+        <thead><tr><th>Symbol</th><th>Dir</th><th>Horizon</th><th>Feature</th><th>Value</th><th>N</th><th>Accuracy</th><th>Signed bps</th><th>Stressed bps</th><th>Status</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="10" class="small">No context leaderboard rows yet</td></tr>'}</tbody>
       `;
     }
     function renderSymbolGate(report) {
@@ -1551,7 +1709,10 @@ def home() -> str:
           guardsRes,
           causesRes,
           automationRes,
-          readinessRes
+          readinessRes,
+          inventoryRes,
+          patternRes,
+          contextRes
         ] = await Promise.all([
           fetchJson("/api/status"),
           fetchJson("/api/account"),
@@ -1577,7 +1738,10 @@ def home() -> str:
           fetchJson("/api/automation/guards"),
           fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
           fetchJson("/api/automation"),
-          fetchJson("/api/data-readiness?lookback=2000")
+          fetchJson("/api/data-readiness?lookback=2000"),
+          fetchJson("/api/research/feature-inventory?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
+          fetchJson("/api/research/pattern-leaderboard?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
+          fetchJson("/api/research/context-leaderboard?lookback=20000&horizon_minutes=15&quality_mode=good_only")
         ]);
 
         const cfg = cfgRes.config || {};
@@ -1627,6 +1791,9 @@ def home() -> str:
         renderSymbolGate(symbolPerfRes);
         renderChampionChallenger(ccRes, ccShortRes);
         renderCellBootstrap(cbRes);
+        renderFeatureInventory(inventoryRes);
+        renderPatternLeaderboard(patternRes);
+        renderContextLeaderboard(contextRes);
 
         document.getElementById("kBalance").textContent = n(account.balance);
         document.getElementById("kPnl").textContent = n(account.daily_realized_pnl);
@@ -2307,3 +2474,72 @@ def api_kill_switch() -> dict:
 @app.get("/api/audit")
 def api_audit(limit: int = Query(default=50, ge=1, le=500)) -> dict:
     return {"items": service.audit_events(limit)}
+
+
+@app.get("/api/research/feature-inventory")
+def api_feature_inventory(
+    lookback: int = Query(default=2000, ge=1, le=100000),
+) -> dict:
+    return {"feature_inventory": service.feature_inventory_report(lookback=lookback)}
+
+
+@app.get("/api/research/pattern-leaderboard")
+def api_pattern_leaderboard(
+    lookback: int = Query(default=100000, ge=1, le=100000),
+    horizons: str = Query(default="15"),
+    quality_mode: str = Query(default="good_only", pattern="^(all|good_only)$"),
+    min_labels: int = Query(default=20, ge=1, le=10000),
+    stress_bps: float = Query(default=3.0, ge=0.0, le=1000.0),
+    min_accuracy: float = Query(default=0.50, ge=0.0, le=1.0),
+) -> dict:
+    parsed: list[int] = []
+    for part in horizons.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= value <= 390 and value not in parsed:
+            parsed.append(value)
+    if not parsed:
+        parsed = [15]
+    return {
+        "pattern_leaderboard": service.pattern_leaderboard_report(
+            lookback=lookback,
+            horizons_minutes=tuple(parsed),
+            quality_mode=quality_mode,
+            min_labels=min_labels,
+            stress_bps=stress_bps,
+            min_accuracy=min_accuracy,
+        )
+    }
+
+
+@app.get("/api/research/context-leaderboard")
+def api_context_leaderboard(
+    lookback: int = Query(default=100000, ge=1, le=100000),
+    horizons: str = Query(default="15"),
+    quality_mode: str = Query(default="good_only", pattern="^(all|good_only)$"),
+    min_labels: int = Query(default=20, ge=1, le=10000),
+    stress_bps: float = Query(default=3.0, ge=0.0, le=1000.0),
+    min_accuracy: float = Query(default=0.50, ge=0.0, le=1.0),
+) -> dict:
+    parsed: list[int] = []
+    for part in horizons.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= value <= 390 and value not in parsed:
+            parsed.append(value)
+    if not parsed:
+        parsed = [15]
+    return {
+        "context_leaderboard": service.context_leaderboard_report(
+            lookback=lookback,
+            horizons_minutes=tuple(parsed),
+            quality_mode=quality_mode,
+            min_labels=min_labels,
+            stress_bps=stress_bps,
+            min_accuracy=min_accuracy,
+        )
+    }
