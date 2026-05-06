@@ -4007,6 +4007,92 @@ class TradingAppService:
         report["lookback"] = max_rows
         return report
 
+    def feature_inventory_report(self, *, lookback: int = 2000) -> dict[str, Any]:
+        max_rows = max(1, min(100000, int(lookback)))
+        rows = self._persistence.list_data_samples(max_rows)
+        specs = [
+            ("core", "feature_trend_score", "numeric", "Trend score"),
+            ("core", "feature_momentum_score", "numeric", "Momentum score"),
+            ("core", "feature_mean_reversion_score", "numeric", "Mean reversion score"),
+            ("core", "feature_sr_distance_atr", "numeric", "S/R distance ATR"),
+            ("core", "feature_volatility_label", "label", "Volatility label"),
+            ("core", "feature_volume_label", "label", "Volume label"),
+            ("core", "feature_sr_label", "label", "Nearest key level label"),
+            ("pattern", "feature_pattern_bias", "label", "Pattern bias"),
+            ("pattern", "feature_pattern_score", "numeric", "Pattern score"),
+            ("pattern", "feature_pattern_summary", "text", "Pattern summary"),
+            ("pattern", "vwap_state", "label", "VWAP state"),
+            ("pattern", "trend_pullback", "label", "Trend pullback"),
+            ("pattern", "recent_range_break", "label", "Recent range break"),
+            ("pattern", "failed_break", "label", "Failed break"),
+            ("pattern", "range_compression", "label", "Range compression"),
+            ("structure", "feature_structure_bias", "label", "Structure bias"),
+            ("structure", "feature_structure_score", "numeric", "Structure score"),
+            ("structure", "feature_structure_summary", "text", "Structure summary"),
+            ("structure", "session_segment", "label", "Session segment"),
+            ("structure", "swing_structure", "label", "Swing structure"),
+            ("structure", "breakout_state", "label", "Breakout state"),
+            ("structure", "close_location", "label", "Close location"),
+            ("structure", "impulse_state", "label", "Impulse state"),
+        ]
+
+        def _extract(row: dict[str, Any], key: str) -> Any:
+            if key in {"vwap_state", "trend_pullback", "recent_range_break", "failed_break", "range_compression"}:
+                return dict(row.get("feature_patterns") or {}).get(key)
+            if key in {"session_segment", "swing_structure", "breakout_state", "close_location", "impulse_state"}:
+                return dict(row.get("feature_structure") or {}).get(key)
+            return row.get(key)
+
+        def _missing(value: Any) -> bool:
+            if value is None:
+                return True
+            if isinstance(value, str):
+                v = value.strip().lower()
+                return v in {"", "unknown", "null"}
+            return False
+
+        items: list[dict[str, Any]] = []
+        total = len(rows)
+        for category, key, kind, label in specs:
+            present = 0
+            unknown = 0
+            examples: dict[str, int] = {}
+            for row in rows:
+                value = _extract(row, key)
+                if _missing(value):
+                    unknown += 1
+                    continue
+                present += 1
+                if isinstance(value, (int, float)):
+                    ex = f"{float(value):.2f}"
+                else:
+                    ex = str(value)
+                examples[ex] = examples.get(ex, 0) + 1
+            top_examples = [k for k, _ in sorted(examples.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
+            items.append(
+                {
+                    "category": category,
+                    "feature": key,
+                    "kind": kind,
+                    "label": label,
+                    "present_count": int(present),
+                    "unknown_count": int(unknown),
+                    "coverage_pct": (float(present) / float(max(1, total))) * 100.0,
+                    "examples": top_examples,
+                }
+            )
+        by_category: dict[str, int] = {}
+        for item in items:
+            by_category[item["category"]] = by_category.get(item["category"], 0) + 1
+        return {
+            "ok": True,
+            "lookback": int(max_rows),
+            "sample_count": int(total),
+            "feature_count": int(len(items)),
+            "by_category": by_category,
+            "items": items,
+        }
+
     def cell_leaderboard_report(
         self,
         *,

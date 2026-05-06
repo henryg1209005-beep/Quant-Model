@@ -1802,56 +1802,6 @@ def home() -> str:
         const activeAnalyticsSubtab = currentAnalyticsSubtab();
         const needWideHistory = analyticsActive && activeAnalyticsSubtab === "charts";
         const fastFirstLoad = !analyticsActive && !window.__apexHydrated;
-        const [
-          status,
-          account,
-          cfgRes,
-          metricsRes,
-          decRes,
-          trRes,
-          decWideRes,
-          trWideRes,
-          gateRes,
-          auditRes,
-          notifRes,
-          sessionRes,
-          accelRes,
-          qualityRes,
-          monitorRes,
-          symbolPerfRes,
-          controlsRes,
-          ccRes,
-          ccShortRes,
-          cbRes,
-          autoHealthRes,
-          guardsRes,
-          causesRes,
-          automationRes,
-          readinessRes,
-          inventoryRes,
-          patternRes,
-          contextRes
-        ] = await Promise.all([
-          fetchJson("/api/status"),
-          fetchJson("/api/account"),
-          fetchJson("/api/config"),
-          fetchJson("/api/metrics"),
-          fetchJson("/api/decisions?limit=15"),
-          fetchJson("/api/trades?limit=15"),
-          needWideHistory ? fetchJson("/api/decisions?limit=80") : Promise.resolve({ items: [] }),
-          needWideHistory ? fetchJson("/api/trades?limit=80") : Promise.resolve({ items: [] }),
-          fetchJson("/api/go-live-gate"),
-          fastFirstLoad ? Promise.resolve({ items: [] }) : fetchJson("/api/audit?limit=20"),
-          fastFirstLoad ? Promise.resolve({ items: [] }) : fetchJson("/api/notifications?limit=20"),
-          fetchJson("/api/session-config"),
-          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/acceleration"),
-          analyticsActive && activeAnalyticsSubtab === "quality"
-            ? fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only")
-            : Promise.resolve({}),
-          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/model-monitoring"),
-          analyticsActive && activeAnalyticsSubtab === "symbolGate"
-            ? fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only")
-            : Promise.resolve({}),
           analyticsActive && activeAnalyticsSubtab === "quality"
             ? fetchJson("/api/quality-controls")
             : Promise.resolve({}),
@@ -2128,6 +2078,13 @@ def api_feature_ablation(
     }
 
 
+@app.get("/api/research/feature-inventory")
+def api_feature_inventory(
+    lookback: int = Query(default=2000, ge=1, le=100000),
+) -> dict:
+    return {"feature_inventory": service.feature_inventory_report(lookback=lookback)}
+
+
 @app.get("/api/research/sample-coverage")
 def api_sample_coverage(
     lookback: int = Query(default=10000, ge=1, le=100000),
@@ -2173,6 +2130,68 @@ def api_cell_leaderboard(
             horizons_minutes=tuple(parsed),
             quality_mode=quality_mode,
             min_labels=min_labels,
+        )
+    }
+
+
+@app.get("/api/research/pattern-leaderboard")
+def api_pattern_leaderboard(
+    lookback: int = Query(default=100000, ge=1, le=100000),
+    horizons: str = Query(default="15"),
+    quality_mode: str = Query(default="good_only", pattern="^(all|good_only)$"),
+    min_labels: int = Query(default=20, ge=1, le=10000),
+    stress_bps: float = Query(default=3.0, ge=0.0, le=1000.0),
+    min_accuracy: float = Query(default=0.50, ge=0.0, le=1.0),
+) -> dict:
+    parsed: list[int] = []
+    for part in horizons.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= value <= 390 and value not in parsed:
+            parsed.append(value)
+    if not parsed:
+        parsed = [15]
+    return {
+        "pattern_leaderboard": service.pattern_leaderboard_report(
+            lookback=lookback,
+            horizons_minutes=tuple(parsed),
+            quality_mode=quality_mode,
+            min_labels=min_labels,
+            stress_bps=stress_bps,
+            min_accuracy=min_accuracy,
+        )
+    }
+
+
+@app.get("/api/research/context-leaderboard")
+def api_context_leaderboard(
+    lookback: int = Query(default=100000, ge=1, le=100000),
+    horizons: str = Query(default="15"),
+    quality_mode: str = Query(default="good_only", pattern="^(all|good_only)$"),
+    min_labels: int = Query(default=20, ge=1, le=10000),
+    stress_bps: float = Query(default=3.0, ge=0.0, le=1000.0),
+    min_accuracy: float = Query(default=0.50, ge=0.0, le=1.0),
+) -> dict:
+    parsed: list[int] = []
+    for part in horizons.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= value <= 390 and value not in parsed:
+            parsed.append(value)
+    if not parsed:
+        parsed = [15]
+    return {
+        "context_leaderboard": service.context_leaderboard_report(
+            lookback=lookback,
+            horizons_minutes=tuple(parsed),
+            quality_mode=quality_mode,
+            min_labels=min_labels,
+            stress_bps=stress_bps,
+            min_accuracy=min_accuracy,
         )
     }
 
