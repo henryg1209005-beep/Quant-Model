@@ -304,6 +304,8 @@ def build_prediction_labels(
                 future = points[idx]
                 forward_bps = ((future.price / point.price) - 1.0) * 10000.0
                 signed_bps = forward_bps * side
+                feature_patterns = dict(sample.get("feature_patterns") or {})
+                feature_structure = dict(sample.get("feature_structure") or {})
                 labels_by_horizon[int(horizon)].append(
                     {
                         "timestamp": point.timestamp.isoformat(),
@@ -320,6 +322,18 @@ def build_prediction_labels(
                         "finnhub_news_sentiment_label": sample.get("finnhub_news_sentiment_label"),
                         "finnhub_news_sentiment_score": _float(sample.get("finnhub_news_sentiment_score")),
                         "indicator_regime": sample.get("indicator_regime") or "unknown",
+                        "feature_volatility_label": sample.get("feature_volatility_label") or "",
+                        "feature_volume_label": sample.get("feature_volume_label") or "",
+                        "feature_sr_label": sample.get("feature_sr_label") or "",
+                        "feature_pattern_bias": sample.get("feature_pattern_bias") or "",
+                        "feature_pattern_score": _float(sample.get("feature_pattern_score")),
+                        "feature_pattern_summary": sample.get("feature_pattern_summary") or "",
+                        "feature_patterns": feature_patterns,
+                        "feature_structure_bias": sample.get("feature_structure_bias") or "",
+                        "feature_structure_score": _float(sample.get("feature_structure_score")),
+                        "feature_structure_summary": sample.get("feature_structure_summary") or "",
+                        "feature_structure": feature_structure,
+                        "session_segment": feature_structure.get("session_segment") or "unknown",
                         "action": action,
                         "prediction_source": prediction_source,
                         "direction": direction,
@@ -383,6 +397,8 @@ def build_prediction_quality_report(
             "by_finnhub_earnings_risk": _group_metrics(labels, "finnhub_earnings_risk"),
             "by_finnhub_news_sentiment_label": _group_metrics(labels, "finnhub_news_sentiment_label"),
             "by_indicator_regime": _group_metrics(labels, "indicator_regime"),
+            "by_session_segment": _group_metrics(labels, "session_segment"),
+            "by_structure_bias": _group_metrics(labels, "feature_structure_bias"),
         }
 
     return {

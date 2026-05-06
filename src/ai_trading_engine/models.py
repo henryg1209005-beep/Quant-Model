@@ -102,6 +102,8 @@ class MarketContext:
     dimensions: list[ContextDimension]
     key_levels: dict[str, float]
     gex_overlay: dict[str, float | str] | None = None
+    pattern_features: dict | None = None
+    structure_features: dict | None = None
 
 
 @dataclass

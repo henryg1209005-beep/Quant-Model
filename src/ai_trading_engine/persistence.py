@@ -168,6 +168,8 @@ class _SqlitePersistence:
         quote = dict(cycle_meta.get("quote") or {})
         indicators = dict(cycle_meta.get("indicators") or {})
         features = dict(cycle_meta.get("features") or {})
+        pattern_features = dict(features.get("patterns") or {})
+        structure_features = dict(features.get("structure") or {})
         sample_quality = dict(cycle_meta.get("sample_quality") or {})
         quality_flags = dict(sample_quality.get("flags") or {})
         providers = dict(meta.get("providers") or {})
@@ -242,6 +244,14 @@ class _SqlitePersistence:
             "feature_volatility_label": str(features.get("volatility_label") or ""),
             "feature_volume_label": str(features.get("volume_label") or ""),
             "feature_sr_label": str(features.get("sr_label") or ""),
+            "feature_pattern_bias": str(pattern_features.get("bias") or ""),
+            "feature_pattern_score": float(pattern_features.get("score") or 0.0),
+            "feature_pattern_summary": str(pattern_features.get("summary") or ""),
+            "feature_patterns": dict(pattern_features.get("patterns") or {}),
+            "feature_structure_bias": str(structure_features.get("bias") or ""),
+            "feature_structure_score": float(structure_features.get("score") or 0.0),
+            "feature_structure_summary": str(structure_features.get("summary") or ""),
+            "feature_structure": dict(structure_features.get("structure") or {}),
             "feature_dimensions": dict(features.get("dimensions") or {}),
             "feature_key_levels": dict(features.get("key_levels") or {}),
             "sample_quality_good": bool(sample_quality.get("good", False)),
@@ -408,6 +418,12 @@ class _SqlitePersistence:
             "feature_volatility_label",
             "feature_volume_label",
             "feature_sr_label",
+            "feature_pattern_bias",
+            "feature_pattern_score",
+            "feature_pattern_summary",
+            "feature_structure_bias",
+            "feature_structure_score",
+            "feature_structure_summary",
             "sample_quality_good",
             "session_bucket",
             "quality_outside_session",
@@ -703,6 +719,12 @@ class _PostgresPersistence:
             "feature_volatility_label",
             "feature_volume_label",
             "feature_sr_label",
+            "feature_pattern_bias",
+            "feature_pattern_score",
+            "feature_pattern_summary",
+            "feature_structure_bias",
+            "feature_structure_score",
+            "feature_structure_summary",
             "sample_quality_good",
             "session_bucket",
             "quality_outside_session",

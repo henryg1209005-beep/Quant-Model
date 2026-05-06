@@ -1166,6 +1166,8 @@ class TradingEngine:
                 "features": {
                     "dimensions": dim_features,
                     "key_levels": dict(context.key_levels or {}),
+                    "patterns": dict(context.pattern_features or {}),
+                    "structure": dict(context.structure_features or {}),
                     "trend_score": float(self._get_dim_value(context, "Trend", 0.0)),
                     "momentum_score": float(self._get_dim_value(context, "Momentum", 0.0)),
                     "mean_reversion_score": float(self._get_dim_value(context, "Mean Reversion", 0.0)),
