@@ -597,12 +597,18 @@ def home() -> str:
           </div>
 
           <div class="kpi-section">
-            <div class="kpi-section-label">Data &amp; Guards</div>
+            <div class="kpi-section-label">Data</div>
             <div class="kpis">
               <div class="card"><div class="kpi-label">Samples With Quote</div><div id="qQuote" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Allowed Regime Cells</div><div id="qAllowedCells" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Best-Horizon Symbols</div><div id="qBestHorizonSymbols" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Sample Skip Rate</div><div id="qSampleSkipRate" class="kpi-val">-</div></div>
+            </div>
+          </div>
+
+          <div class="kpi-section">
+            <div class="kpi-section-label">Calibration &amp; Guards</div>
+            <div class="kpis">
               <div class="card"><div class="kpi-label">Coverage Guard</div><div id="qCoverageGuard" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Policy Tier</div><div id="qPolicyTier" class="kpi-val">-</div></div>
               <div class="card"><div class="kpi-label">Symbol Quarantine</div><div id="qSymbolQuarantine" class="kpi-val">-</div></div>
