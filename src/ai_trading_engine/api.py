@@ -1728,21 +1728,39 @@ def home() -> str:
           fetchJson("/api/notifications?limit=20"),
           fetchJson("/api/session-config"),
           fetchJson("/api/acceleration"),
-          fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only"),
+          analyticsActive && activeAnalyticsSubtab === "quality"
+            ? fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only")
+            : Promise.resolve({}),
           fetchJson("/api/model-monitoring"),
-          fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
-          fetchJson("/api/quality-controls"),
-          fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&challenger_min_confidence=0.55&min_daily_selections=10"),
-          fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&direction=SHORT&challenger_min_confidence=0.60&challenger_max_confidence=0.80&min_daily_selections=8"),
-          fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=20000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=120&robust_only=false"),
+          analyticsActive && activeAnalyticsSubtab === "symbolGate"
+            ? fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "quality"
+            ? fetchJson("/api/quality-controls")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "cc"
+            ? fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&challenger_min_confidence=0.55&min_daily_selections=10")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "cc"
+            ? fetchJson("/api/research/champion-challenger-daily?lookback=20000&horizon_minutes=15&quality_mode=good_only&min_train_labels=150&min_cell_labels=12&direction=SHORT&challenger_min_confidence=0.60&challenger_max_confidence=0.80&min_daily_selections=8")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "symbolGate"
+            ? fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=20000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=120&robust_only=false")
+            : Promise.resolve({}),
           fetchJson("/api/autonomy/health-score"),
           fetchJson("/api/automation/guards"),
           fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
           fetchJson("/api/automation"),
           fetchJson("/api/data-readiness?lookback=2000"),
-          fetchJson("/api/research/feature-inventory?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
-          fetchJson("/api/research/pattern-leaderboard?lookback=20000&horizon_minutes=15&quality_mode=good_only"),
-          fetchJson("/api/research/context-leaderboard?lookback=20000&horizon_minutes=15&quality_mode=good_only")
+          analyticsActive && activeAnalyticsSubtab === "inventory"
+            ? fetchJson("/api/research/feature-inventory?lookback=2000")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "patterns"
+            ? fetchJson("/api/research/pattern-leaderboard?lookback=20000&horizons=15,30&quality_mode=good_only&min_labels=5&stress_bps=3&min_accuracy=0.5")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "context"
+            ? fetchJson("/api/research/context-leaderboard?lookback=20000&horizons=15,30&quality_mode=good_only&min_labels=5&stress_bps=3&min_accuracy=0.5")
+            : Promise.resolve({})
         ]);
 
         const cfg = cfgRes.config || {};
@@ -1788,13 +1806,13 @@ def home() -> str:
         renderEquityChart(tradesWide);
         renderPnlHistogram(tradesWide);
         renderDecisionMix(decisionsWide);
-        renderPredictionQuality(qualityRes, controlsRes);
-        renderSymbolGate(symbolPerfRes);
-        renderChampionChallenger(ccRes, ccShortRes);
-        renderCellBootstrap(cbRes);
-        renderFeatureInventory(inventoryRes);
-        renderPatternLeaderboard(patternRes);
-        renderContextLeaderboard(contextRes);
+        if (qualityRes.prediction_quality) renderPredictionQuality(qualityRes, controlsRes);
+        if (symbolPerfRes.symbol_performance) renderSymbolGate(symbolPerfRes);
+        if (ccRes.champion_challenger_daily) renderChampionChallenger(ccRes, ccShortRes);
+        if (cbRes.cell_leaderboard_bootstrap) renderCellBootstrap(cbRes);
+        if (inventoryRes.feature_inventory) renderFeatureInventory(inventoryRes);
+        if (patternRes.pattern_leaderboard) renderPatternLeaderboard(patternRes);
+        if (contextRes.context_leaderboard) renderContextLeaderboard(contextRes);
 
         document.getElementById("kBalance").textContent = n(account.balance);
         document.getElementById("kPnl").textContent = n(account.daily_realized_pnl);
