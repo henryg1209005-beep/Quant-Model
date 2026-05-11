@@ -53,118 +53,127 @@ def home() -> str:
   <title>Apex .01</title>
   <style>
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface-2: #1c2333;
-      --surface-3: #21262d;
-      --border: #30363d;
-      --border-strong: #484f58;
-      --text: #e6edf3;
-      --muted: #7d8590;
-      --dim: #4a5568;
-      --brand: #2dd4bf;
-      --brand-2: #3b82f6;
-      --danger: #f85149;
-      --warn: #d29922;
-      --ok: #3fb950;
-      --ink: #e6edf3;
-      --radius: 8px;
-      --shadow: 0 1px 3px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
-      --shadow-soft: 0 1px 2px rgba(0,0,0,0.4);
+      --bg: #f3f4f6;
+      --text: #0d1117;
+      --muted: #6b7280;
+      --surface: #ffffff;
+      --surface-soft: #f9fafb;
+      --line: #e1e4ea;
+      --line-strong: #c4cad4;
+      --brand: #1a56db;
+      --brand-2: #1e40af;
+      --danger: #b42318;
+      --warn: #b45309;
+      --ok: #166534;
+      --ink: #0d1117;
+      --radius: 3px;
+      --shadow: 0 1px 3px rgba(15,23,42,0.07), 0 0 0 1px rgba(15,23,42,0.04);
+      --shadow-soft: 0 1px 2px rgba(15,23,42,0.05);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--text);
       background: var(--bg);
-      font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
     }
     .app {
       max-width: 1500px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 16px 20px;
     }
     .header {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
       margin-bottom: 16px;
-      padding: 20px 24px;
-      background: var(--surface);
-      border: 1px solid rgba(45, 212, 191, 0.2);
-      border-top: 2px solid var(--brand);
+      padding: 16px 20px;
+      color: #e2e8f0;
+      background: #0d1117;
+      border: 1px solid #1e2733;
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
     }
     h1 {
       margin: 0;
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: var(--text);
+      font-size: 17px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #f1f5f9;
     }
     .subtitle {
       margin: 4px 0 0;
-      color: var(--muted);
-      font-size: 12px;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.01em;
     }
     .chips {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
     }
     .chip {
-      border: 1px solid var(--border-strong);
-      background: var(--surface-2);
-      border-radius: 999px;
-      padding: 5px 12px;
+      border: 1px solid #2d3a4a;
+      background: #141d2b;
+      border-radius: 2px;
+      padding: 4px 9px;
       font-size: 11px;
       font-weight: 600;
-      color: var(--muted);
+      color: #7a8fa8;
+      letter-spacing: 0.03em;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     }
-    .chip.ok    { border-color: rgba(63,185,80,0.45);  background: rgba(63,185,80,0.1);  color: #3fb950; }
-    .chip.warn  { border-color: rgba(210,153,34,0.45); background: rgba(210,153,34,0.1); color: #d29922; }
-    .chip.danger{ border-color: rgba(248,81,73,0.45);  background: rgba(248,81,73,0.1);  color: #f85149; }
+    .chip.ok   { border-color: #1a4731; background: #0a2318; color: #6ee7b7; }
+    .chip.warn { border-color: #78350f; background: #1c0f05; color: #fbbf24; }
+    .chip.danger { border-color: #7f1d1d; background: #1a0808; color: #fca5a5; }
     .toolbar {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
       gap: 6px;
+      margin-bottom: 6px;
+    }
+    .toolbar.secondary {
+      grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+      margin-top: 0;
       margin-bottom: 8px;
     }
-    .toolbar-sep {
-      width: 1px;
-      background: var(--border);
-      margin: 0 4px;
-      align-self: stretch;
-    }
     button {
-      border: 1px solid var(--border);
+      border: 1px solid rgba(15,23,42,0.14);
       border-radius: var(--radius);
-      padding: 8px 14px;
-      font-weight: 700;
+      padding: 8px 12px;
+      color: #fff;
+      font-weight: 600;
       font-size: 12px;
       cursor: pointer;
-      transition: all .12s ease;
-      white-space: nowrap;
-      background: var(--surface-2);
-      color: var(--text);
+      letter-spacing: 0.01em;
+      transition: opacity .1s ease;
     }
-    button:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    button:active { transform: translateY(0); filter: brightness(0.95); }
-    button.start  { background: rgba(63,185,80,0.15);  border-color: rgba(63,185,80,0.45);  color: #3fb950; }
-    button.stop   { background: rgba(248,81,73,0.15);  border-color: rgba(248,81,73,0.45);  color: #f85149; }
-    button.once   { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.45); color: #3b82f6; }
-    button.refresh{ background: var(--surface-2); border-color: var(--border-strong); color: var(--muted); }
-    button.research { background: var(--surface-2); border-color: var(--border); color: var(--muted); }
-    button.research:hover { border-color: var(--brand); color: var(--brand); filter: none; }
+    button:hover { opacity: 0.82; }
+    button:active { opacity: 0.65; }
+    button.start  { background: #166534; border-color: #14532d; }
+    button.stop   { background: var(--danger); border-color: #991b1b; }
+    button.once   { background: var(--brand); border-color: #1e40af; }
+    button.refresh {
+      color: var(--text);
+      border-color: var(--line-strong);
+      background: var(--surface);
+    }
+    button.research {
+      color: #1e293b;
+      border-color: #c4cad4;
+      background: #f8fafc;
+    }
     .flash {
-      min-height: 16px;
+      min-height: 20px;
       margin: 4px 0 8px;
-      color: var(--brand);
+      color: #374151;
       font-size: 12px;
-      font-weight: 600;
+      font-style: italic;
     }
     .opsline {
       display: grid;
@@ -173,64 +182,66 @@ def home() -> str:
       margin-bottom: 14px;
     }
     .opsitem {
+      border: 1px solid var(--line);
       background: var(--surface);
-      border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 8px 12px;
-      font-size: 11px;
-      color: var(--muted);
+      font-size: 12px;
+      color: #1e293b;
     }
     .opsitem strong {
-      color: var(--text);
-      font-weight: 600;
       display: block;
-      margin-bottom: 2px;
+      color: var(--muted);
+      font-weight: 700;
       font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.07em;
+      margin-bottom: 3px;
     }
     .blocker { display: block; margin-top: 2px; line-height: 1.3; }
     .blocker-label {
       display: inline-block;
-      border-radius: 999px;
-      padding: 2px 8px;
-      background: rgba(210,153,34,0.12);
-      border: 1px solid rgba(210,153,34,0.4);
-      color: #d29922;
+      border-radius: 2px;
+      padding: 2px 7px;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: #9a3412;
       font-weight: 700;
-      font-size: 10px;
-      margin-bottom: 2px;
+      font-size: 11px;
+      margin-bottom: 3px;
     }
     .blocker-detail {
       display: block;
-      color: var(--muted);
+      color: #4b5563;
       font-size: 11px;
       overflow-wrap: anywhere;
     }
     .tabs {
       display: flex;
-      gap: 4px;
+      gap: 0;
       margin-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 10px;
+      border-bottom: 2px solid var(--line);
     }
     .tabbtn {
-      border: 1px solid transparent;
-      border-radius: 999px;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      border-radius: 0;
       background: transparent;
       color: var(--muted);
-      padding: 7px 18px;
+      padding: 8px 18px;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      transition: all .12s ease;
+      letter-spacing: 0.01em;
+      transition: color .1s ease;
     }
-    .tabbtn:hover { color: var(--text); background: var(--surface-2); }
     .tabbtn.active {
-      background: var(--surface-2);
-      border-color: var(--border-strong);
-      color: var(--text);
+      background: transparent;
+      border-bottom-color: var(--ink);
+      color: var(--ink);
     }
+    .tabbtn:hover:not(.active) { color: var(--text); }
     .panel { display: none; }
     .panel.active { display: block; }
     .subtabs {
@@ -238,75 +249,57 @@ def home() -> str:
       flex-wrap: wrap;
       gap: 4px;
       margin-bottom: 14px;
-      padding: 4px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
     }
     .subtabbtn {
-      border: 1px solid transparent;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--muted);
-      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: #374151;
+      padding: 5px 10px;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
-      transition: all .12s ease;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      transition: background .1s ease, color .1s ease;
     }
-    .subtabbtn:hover { color: var(--text); background: var(--surface-2); }
     .subtabbtn.active {
-      background: var(--surface-2);
-      border-color: var(--border-strong);
-      color: var(--text);
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #f1f5f9;
     }
     .analytics-panel { display: none; }
     .analytics-panel.active { display: block; }
-    .kpi-section { margin-bottom: 16px; }
-    .kpi-section-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--dim);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .kpi-section-label::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
     .kpis {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 8px;
+      margin-bottom: 14px;
     }
     .card {
       background: var(--surface);
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 14px;
       box-shadow: var(--shadow-soft);
-      transition: border-color .12s ease;
+      padding: 14px;
     }
-    .card:hover { border-color: var(--border-strong); }
+    .kpis .card {
+      border-top: 2px solid var(--line-strong);
+    }
     .kpi-label {
       font-size: 10px;
-      font-weight: 700;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
       color: var(--muted);
+      font-weight: 700;
     }
     .kpi-val {
-      margin-top: 8px;
-      font-size: 19px;
+      margin-top: 6px;
+      font-size: 21px;
       font-weight: 700;
-      color: var(--text);
       line-height: 1.15;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
     }
     .grid {
       display: grid;
@@ -320,25 +313,25 @@ def home() -> str:
     .card h3 {
       margin: 0 0 12px;
       font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
+      font-weight: 700;
       padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--line);
     }
     .kv {
       display: grid;
-      grid-template-columns: 165px minmax(0, 1fr);
-      gap: 6px 12px;
+      grid-template-columns: 158px minmax(0, 1fr);
+      gap: 5px 10px;
       font-size: 12px;
     }
-    .k { color: var(--muted); font-weight: 600; }
+    .k { color: var(--muted); font-weight: 600; font-size: 11px; }
     .v {
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid #f0f2f6;
       padding-bottom: 5px;
       word-break: break-word;
-      color: var(--text);
+      font-size: 12px;
     }
     .mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -346,7 +339,7 @@ def home() -> str:
     }
     .table-wrap {
       overflow: auto;
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--surface);
     }
@@ -358,38 +351,40 @@ def home() -> str:
     }
     th, td {
       text-align: left;
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
+      padding: 7px 10px;
+      border-bottom: 1px solid #eef0f5;
+      vertical-align: middle;
     }
     th {
       position: sticky;
       top: 0;
-      background: var(--surface-2);
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      background: #f3f4f6;
+      color: #6b7280;
       z-index: 1;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
     }
-    td { color: var(--text); }
-    tr:hover td { background: var(--surface-2); }
+    tr:hover td { background: #fafbfc; }
     .badge {
       display: inline-block;
-      border-radius: 999px;
-      border: 1px solid var(--border-strong);
-      padding: 2px 8px;
+      border-radius: 2px;
+      border: 1px solid #d1d5db;
+      padding: 2px 6px;
       font-size: 10px;
       font-weight: 700;
-      background: var(--surface-2);
-      color: var(--muted);
+      background: #f9fafb;
+      color: #374151;
       white-space: nowrap;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
-    .b-long  { border-color: rgba(63,185,80,0.4);  background: rgba(63,185,80,0.1);  color: #3fb950; }
-    .b-short { border-color: rgba(248,81,73,0.4);  background: rgba(248,81,73,0.1);  color: #f85149; }
-    .b-trade { border-color: rgba(45,212,191,0.4); background: rgba(45,212,191,0.1); color: #2dd4bf; }
-    .b-hold  { border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.1); color: #d29922; }
+    .b-long  { border-color: #86efac; background: #f0fdf4; color: #166534; }
+    .b-short { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+    .b-trade { border-color: #67e8f9; background: #ecfeff; color: #0e7490; }
+    .b-hold  { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
     .small { color: var(--muted); font-size: 11px; }
     .ellipsis {
       overflow: hidden;
@@ -407,25 +402,25 @@ def home() -> str:
       .analytics-grid { grid-template-columns: 1fr 1fr 1fr; }
     }
     .chart-card {
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--surface);
-      padding: 14px;
+      padding: 12px;
     }
     .chart-title {
       font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
       color: var(--muted);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
     }
     .chart-svg {
       width: 100%;
-      height: 230px;
+      height: 200px;
       display: block;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
+      background: #f9fafb;
+      border: 1px solid #eef0f5;
       border-radius: var(--radius);
     }
     .chart-empty {
@@ -433,16 +428,18 @@ def home() -> str:
       color: var(--muted);
       padding: 64px 8px;
       text-align: center;
-      background: var(--surface-2);
-      border: 1px dashed var(--border-strong);
+      background: #f9fafb;
+      border: 1px dashed var(--line-strong);
       border-radius: var(--radius);
     }
     @media (max-width: 720px) {
-      .app { padding: 12px; }
-      h1 { font-size: 20px; }
-      .toolbar { flex-wrap: wrap; }
+      .app { padding: 10px 12px; }
+      .header { padding: 12px 14px; }
+      h1 { font-size: 15px; }
+      .toolbar, .toolbar.secondary { grid-template-columns: 1fr 1fr; }
       .kv { grid-template-columns: 1fr; }
-      .tabs { overflow: auto; }
+      .k { padding-top: 3px; }
+      .tabs { overflow-x: auto; }
     }
   </style>
 </head>
@@ -450,8 +447,8 @@ def home() -> str:
   <div class="app">
     <div class="header">
       <div>
-        <h1>Apex <span style="color:var(--brand)">.01</span></h1>
-        <p class="subtitle">AI trading engine &middot; status, risk gates, execution, audit &amp; analytics</p>
+        <h1>Apex .01</h1>
+        <p class="subtitle">Operational dashboard for status, risk gates, execution, audit trail, and visual analytics</p>
       </div>
       <div class="chips">
         <div id="chipWorker" class="chip">Worker: -</div>
@@ -461,23 +458,24 @@ def home() -> str:
     </div>
 
     <div class="toolbar">
-      <button class="start" onclick="post('/api/start', 'Start requested')">&#9654; Start Worker</button>
-      <button class="stop" onclick="post('/api/stop', 'Stop requested')">&#9646; Stop Worker</button>
-      <button class="once" onclick="post('/api/run-once', 'Single cycle requested')">&#8635; Run Once</button>
-      <button class="refresh" onclick="refreshAll()">&#8635; Refresh</button>
-      <div class="toolbar-sep"></div>
-      <button class="research" onclick="runResearch('/api/retrain?lookback=5000', 'Retrain triggered')">Retrain</button>
-      <button class="research" onclick="runResearch('/api/research/walk-forward?lookback=10000&folds=4&min_train=40&min_test=20&bins=10', 'Walk-forward report generated')">Walk-Forward</button>
-      <button class="research" onclick="runResearch('/api/research/predictive?lookback=10000&folds=4&min_train=40&min_test=20&n_estimators=80&learning_rate=0.1&max_bins=16', 'Predictive research generated')">Predictive Research</button>
-      <button class="research" onclick="setAccelerationMode('standard')">Standard Mode</button>
-      <button class="research" onclick="setAccelerationMode('accelerated')">Accelerated Mode</button>
+      <button class="start" onclick="post('/api/start', 'Start requested')">Start Worker</button>
+      <button class="stop" onclick="post('/api/stop', 'Stop requested')">Stop Worker</button>
+      <button class="once" onclick="post('/api/run-once', 'Single cycle requested')">Run One Cycle</button>
+      <button class="refresh" onclick="refreshAll()">Refresh Now</button>
+    </div>
+    <div class="toolbar secondary">
+      <button class="research" onclick="runResearch('/api/retrain?lookback=5000', 'Retrain triggered')">Run Retrain</button>
+      <button class="research" onclick="runResearch('/api/research/walk-forward?lookback=10000&folds=4&min_train=40&min_test=20&bins=10', 'Walk-forward report generated')">Run Walk-Forward</button>
+      <button class="research" onclick="runResearch('/api/research/predictive?lookback=10000&folds=4&min_train=40&min_test=20&n_estimators=80&learning_rate=0.1&max_bins=16', 'Predictive report generated')">Run Predictive Research</button>
+      <button class="research" onclick="setAccelerationMode('standard')">Mode: Standard</button>
+      <button class="research" onclick="setAccelerationMode('accelerated')">Mode: Accelerated</button>
     </div>
     <div id="flash" class="flash"></div>
     <div class="opsline">
-      <div class="opsitem"><strong>Last Refresh</strong> <span id="opsRefresh">-</span></div>
-      <div class="opsitem"><strong>NY Session</strong> <span id="opsSession">-</span></div>
-      <div class="opsitem"><strong>Blocker</strong> <span id="opsBlocker" class="blocker">-</span></div>
-      <div class="opsitem"><strong>System Health</strong> <span id="opsHealth">-</span></div>
+      <div class="opsitem"><strong>Last Refresh:</strong> <span id="opsRefresh">-</span></div>
+      <div class="opsitem"><strong>NY Session:</strong> <span id="opsSession">-</span></div>
+      <div class="opsitem"><strong>Current Blocker:</strong> <span id="opsBlocker" class="blocker">-</span></div>
+      <div class="opsitem"><strong>System Health:</strong> <span id="opsHealth">-</span></div>
     </div>
     <div class="tabs">
       <button id="tabOverviewBtn" class="tabbtn active" onclick="showTab('overview')">Overview</button>
@@ -999,10 +997,10 @@ def home() -> str:
       const baseY = toY(0);
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#374151" stroke-width="1"/>
+          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
           <polyline points="${poly}" fill="none" stroke="#0ea5e9" stroke-width="2"/>
-          <text x="${padX}" y="12" font-size="10" fill="#7d8590">max ${n(yHi, 2)}</text>
-          <text x="${padX}" y="${height - 4}" font-size="10" fill="#7d8590">min ${n(yLo, 2)}</text>
+          <text x="${padX}" y="12" font-size="10" fill="#475569">max ${n(yHi, 2)}</text>
+          <text x="${padX}" y="${height - 4}" font-size="10" fill="#475569">min ${n(yLo, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("eqChart");
@@ -1040,10 +1038,10 @@ def home() -> str:
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#374151" stroke-width="1"/>
+          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#cbd5e1" stroke-width="1"/>
           ${rects}
-          <text x="${pad}" y="12" font-size="10" fill="#7d8590">min ${n(minV, 2)}</text>
-          <text x="${width - pad - 70}" y="12" font-size="10" fill="#7d8590">max ${n(maxV, 2)}</text>
+          <text x="${pad}" y="12" font-size="10" fill="#475569">min ${n(minV, 2)}</text>
+          <text x="${width - pad - 70}" y="12" font-size="10" fill="#475569">max ${n(maxV, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("pnlHist");
@@ -1088,15 +1086,15 @@ def home() -> str:
         const y = baseline - h;
         return `
           <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${b.color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="${baseline + 14}" text-anchor="middle" font-size="10" fill="#7d8590">${b.label}</text>
-          <text x="${x + (barW / 2)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#a0aec0">${b.value}</text>
+          <text x="${x + (barW / 2)}" y="${baseline + 14}" text-anchor="middle" font-size="10" fill="#475569">${b.label}</text>
+          <text x="${x + (barW / 2)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#334155">${b.value}</text>
         `;
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="50" y1="${baseline}" x2="${width - 30}" y2="${baseline}" stroke="#374151" stroke-width="1"/>
+          <line x1="50" y1="${baseline}" x2="${width - 30}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
           ${rects}
-          <text x="16" y="12" font-size="10" fill="#7d8590">n=${rows.length}</text>
+          <text x="16" y="12" font-size="10" fill="#475569">n=${rows.length}</text>
         </svg>
       `;
       const el = document.getElementById("decMix");
@@ -1140,29 +1138,29 @@ def home() -> str:
         return;
       }
       const width = 520;
-      const height = 220;
-      const baseline = 118;
+      const height = 180;
+      const baseline = 92;
       const maxAbs = Math.max(1, ...entries.map((h) => Math.abs(h.signed)));
       const barW = Math.max(32, Math.min(76, 320 / Math.max(1, entries.length)));
       const gap = 28;
       const x0 = Math.max(34, (width - ((barW + gap) * entries.length)) / 2);
       const bars = entries.map((h, i) => {
-        const mag = Math.abs(h.signed) / maxAbs * 95;
+        const mag = Math.abs(h.signed) / maxAbs * 62;
         const x = x0 + i * (barW + gap);
         const y = h.signed >= 0 ? baseline - mag : baseline;
         const color = h.signed >= 0 ? "#16a34a" : "#dc2626";
         return `
-          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(3, mag)}" fill="${color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="192" text-anchor="middle" font-size="10" fill="#7d8590">${h.horizon}m</text>
-          <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#a0aec0">${n(h.signed, 1)}</text>
-          <text x="${x + (barW / 2)}" y="207" text-anchor="middle" font-size="9" fill="#7d8590">n=${h.count} ${pct(h.accuracy)}</text>
+          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.88"/>
+          <text x="${x + (barW / 2)}" y="164" text-anchor="middle" font-size="10" fill="#475569">${h.horizon}m</text>
+          <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#334155">${n(h.signed, 1)}</text>
+          <text x="${x + (barW / 2)}" y="176" text-anchor="middle" font-size="9" fill="#64748b">n=${h.count} ${pct(h.accuracy)}</text>
         `;
       }).join("");
       const el = document.getElementById("qualityChart");
       if (el) {
         el.innerHTML = `
           <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-            <line x1="28" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#374151" stroke-width="1"/>
+            <line x1="28" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
             ${bars}
           </svg>
         `;
