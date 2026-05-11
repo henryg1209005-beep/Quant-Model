@@ -217,20 +217,35 @@ class TestHardening(unittest.TestCase):
                     size=1,
                     sl_ticks=0,
                     tp_ticks=0,
-                    reasoning="base",
+                    reasoning="base [collection_only]",
                     forecast_direction="LONG",
                     forecast_confidence=0.5,
                     forecast_horizon_minutes=15,
                 ),
-                note="base",
+                note="Hold (collection_only)",
                 metadata={"quote": {"last": 100.0}},
             )
-            with patch.object(service, "_evaluate_data_quality_guard", return_value={"active": True, "reason": "low_sample_volume:0<20"}):
+            with patch.object(
+                service,
+                "_evaluate_data_quality_guard",
+                return_value={"active": True, "reason": "low_sample_volume:0<20", "metrics": {"in_session": True}},
+            ):
                 with patch.object(service._engine, "run_cycle", return_value=cycle) as run_cycle:
                     out = service.run_cycle_once()
             run_cycle.assert_called_once_with(collect_only=True)
-            self.assertEqual(out.note, "Guard hold: data quality")
+            self.assertEqual(out.note, "Hold (collection_only)")
             self.assertEqual(out.decision.action, "hold")
+            self.assertEqual(out.decision.forecast_direction, "LONG")
+            self.assertIn("[collection_only]", out.decision.reasoning)
+            self.assertIn("[bootstrap_collect_only:low_sample_volume:0<20]", out.decision.reasoning)
+            self.assertEqual(
+                dict((out.metadata or {}).get("quality_guard_collect_only", {})).get("reason"),
+                "low_sample_volume:0<20",
+            )
+            self.assertEqual(
+                dict((out.metadata or {}).get("collection_override", {})).get("reason"),
+                "in_session_low_volume_recovery",
+            )
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

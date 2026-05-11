@@ -3612,15 +3612,17 @@ class TradingAppService:
                         cycle.metadata["quality_guard_collect_error"] = str(exc)
                     finally:
                         self._engine.settings = self._settings
-                    cycle.note = "Guard hold: data quality"
-                    cycle.decision.action = "hold"
-                    cycle.decision.direction = None
-                    cycle.decision.size = 1
-                    cycle.decision.sl_ticks = 0
-                    cycle.decision.tp_ticks = 0
-                    cycle.decision.reasoning = f"Data quality guard active: {quality_guard.get('reason')}."
+                    cycle.metadata = dict(cycle.metadata or {})
+                    cycle.metadata["quality_guard_collect_only"] = {
+                        "active": True,
+                        "reason": str(quality_guard.get("reason") or ""),
+                    }
+                    cycle.decision.reasoning = (
+                        f"{cycle.decision.reasoning} [bootstrap_collect_only:{quality_guard.get('reason')}]"
+                    ).strip()
+                    if str(cycle.note or "").strip() in {"", "base"}:
+                        cycle.note = "Bootstrap collect-only: data quality"
                     if in_session:
-                        cycle.metadata = dict(cycle.metadata or {})
                         cycle.metadata["collection_override"] = {
                             "allow_low_quality_sample": True,
                             "reason": "in_session_low_volume_recovery",
