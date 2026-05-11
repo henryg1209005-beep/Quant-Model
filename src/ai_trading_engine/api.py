@@ -1279,7 +1279,6 @@ def home() -> str:
         const gy = baseline - f * 62;
         return `<line x1="22" y1="${gy}" x2="${width - 22}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
       }).join("");
-      const el = document.getElementById("qualityChart");
       if (el) {
         el.innerHTML = `
           <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
