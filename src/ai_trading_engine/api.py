@@ -441,6 +441,67 @@ def home() -> str:
       .k { padding-top: 3px; }
       .tabs { overflow-x: auto; }
     }
+
+    tbody tr:nth-child(even) td { background: #fafbfd; }
+    tr:hover td { background: #eef3fb !important; }
+
+    .kpis .card { transition: box-shadow .15s ease, transform .15s ease; }
+    .kpis .card:hover {
+      box-shadow: 0 4px 14px rgba(15,23,42,0.09), 0 0 0 1px rgba(15,23,42,0.06);
+      transform: translateY(-1px);
+    }
+
+    .flash:not(:empty) {
+      padding: 5px 10px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius);
+      color: #92400e;
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+    .chip.ok::before {
+      content: '';
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background: #6ee7b7;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+      animation: pulse-dot 2.5s ease-in-out infinite;
+    }
+    .chip.warn::before {
+      content: '';
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background: #fbbf24;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .chip.danger::before {
+      content: '';
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background: #fca5a5;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -999,8 +1060,8 @@ def home() -> str:
       const maxY = Math.max(...points.map((p) => p.y));
       const width = 520;
       const height = 180;
-      const padX = 24;
-      const padY = 16;
+      const padX = 32;
+      const padY = 20;
       const dx = Math.max(1, width - padX * 2);
       const dy = Math.max(1, height - padY * 2);
       const yLo = (minY === maxY) ? (minY - 1) : minY;
@@ -1008,13 +1069,29 @@ def home() -> str:
       const toX = (i) => padX + ((i / Math.max(1, points.length - 1)) * dx);
       const toY = (v) => padY + ((yHi - v) / Math.max(1e-9, (yHi - yLo))) * dy;
       const poly = points.map((p, i) => `${toX(i)},${toY(p.y)}`).join(" ");
-      const baseY = toY(0);
+      const baseY = Math.min(padY + dy, Math.max(padY, toY(0)));
+      const finalEq = points[points.length - 1].y;
+      const lineColor = finalEq >= 0 ? "#16a34a" : "#dc2626";
+      const gradRGB = finalEq >= 0 ? "22,163,74" : "220,38,38";
+      const areaClose = `${toX(points.length - 1)},${baseY} ${toX(0)},${baseY}`;
+      const gridLines = [0.25, 0.5, 0.75].map((f) => {
+        const gy = padY + f * dy;
+        return `<line x1="${padX}" y1="${gy}" x2="${width - padX}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
+      }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
-          <polyline points="${poly}" fill="none" stroke="#0ea5e9" stroke-width="2"/>
-          <text x="${padX}" y="12" font-size="10" fill="#475569">max ${n(yHi, 2)}</text>
-          <text x="${padX}" y="${height - 4}" font-size="10" fill="#475569">min ${n(yLo, 2)}</text>
+          <defs>
+            <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(${gradRGB},0.20)"/>
+              <stop offset="100%" stop-color="rgba(${gradRGB},0.01)"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          <polygon points="${poly} ${areaClose}" fill="url(#eqGrad)"/>
+          <line x1="${padX}" y1="${baseY}" x2="${width - padX}" y2="${baseY}" stroke="#c4cad4" stroke-width="1" stroke-dasharray="4,3"/>
+          <polyline points="${poly}" fill="none" stroke="${lineColor}" stroke-width="1.5"/>
+          <text x="${padX}" y="13" font-size="10" fill="#6b7280">max ${n(yHi, 2)}</text>
+          <text x="${padX}" y="${height - 4}" font-size="10" fill="#6b7280">min ${n(yLo, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("eqChart");
@@ -1040,22 +1117,29 @@ def home() -> str:
       const maxC = Math.max(...counts, 1);
       const width = 520;
       const height = 180;
-      const pad = 20;
+      const pad = 24;
       const plotW = width - pad * 2;
       const plotH = height - pad * 2;
       const barW = plotW / bins;
+      const gridLines = [0.25, 0.5, 0.75].map((f) => {
+        const gy = pad + (1 - f) * plotH;
+        return `<line x1="${pad}" y1="${gy}" x2="${width - pad}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
+      }).join("");
       const rects = counts.map((c, i) => {
         const h = (c / maxC) * plotH;
         const x = pad + (i * barW) + 1;
         const y = pad + (plotH - h);
-        return `<rect x="${x}" y="${y}" width="${Math.max(1, barW - 2)}" height="${h}" fill="#14b8a6" opacity="0.85"/>`;
+        const binCenter = minV + ((i + 0.5) / bins) * span;
+        const barColor = binCenter >= 0 ? "#16a34a" : "#dc2626";
+        return `<rect x="${x}" y="${y}" width="${Math.max(1, barW - 2)}" height="${h}" fill="${barColor}" opacity="0.72"/>`;
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#cbd5e1" stroke-width="1"/>
+          ${gridLines}
+          <line x1="${pad}" y1="${pad + plotH}" x2="${width - pad}" y2="${pad + plotH}" stroke="#c4cad4" stroke-width="1"/>
           ${rects}
-          <text x="${pad}" y="12" font-size="10" fill="#475569">min ${n(minV, 2)}</text>
-          <text x="${width - pad - 70}" y="12" font-size="10" fill="#475569">max ${n(maxV, 2)}</text>
+          <text x="${pad}" y="14" font-size="10" fill="#6b7280">min ${n(minV, 2)}</text>
+          <text x="${width - pad - 72}" y="14" font-size="10" fill="#6b7280">max ${n(maxV, 2)}</text>
         </svg>
       `;
       const el = document.getElementById("pnlHist");
@@ -1083,32 +1167,39 @@ def home() -> str:
       const total = Math.max(1, trade + hold);
       const width = 520;
       const height = 180;
-      const barW = 70;
-      const gap = 38;
-      const x0 = 80;
-      const baseline = 140;
-      const scale = 90 / total;
+      const barW = 68;
+      const gap = 40;
+      const x0 = 68;
+      const baseline = 142;
+      const maxVal = Math.max(trade, hold, longDir, shortDir, 1);
+      const scale = 96 / maxVal;
+      const gridLines = [0.33, 0.66, 1.0].map((f) => {
+        const gy = baseline - f * 96;
+        return `<line x1="${x0 - 8}" y1="${gy}" x2="${width - 28}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
+      }).join("");
       const bars = [
-        { label: "Trade", value: trade, color: "#0ea5e9" },
-        { label: "Hold", value: hold, color: "#f59e0b" },
-        { label: "Long", value: longDir, color: "#16a34a" },
-        { label: "Short", value: shortDir, color: "#dc2626" },
+        { label: "Trade", value: trade, pct: Math.round(trade / total * 100), color: "#1a56db" },
+        { label: "Hold",  value: hold,  pct: Math.round(hold / total * 100),  color: "#6b7280" },
+        { label: "Long",  value: longDir, pct: longDir ? Math.round(longDir / Math.max(1, trade) * 100) : 0, color: "#16a34a" },
+        { label: "Short", value: shortDir, pct: shortDir ? Math.round(shortDir / Math.max(1, trade) * 100) : 0, color: "#dc2626" },
       ];
       const rects = bars.map((b, i) => {
         const h = Math.max(2, b.value * scale);
         const x = x0 + i * (barW + gap);
         const y = baseline - h;
         return `
-          <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${b.color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="${baseline + 14}" text-anchor="middle" font-size="10" fill="#475569">${b.label}</text>
-          <text x="${x + (barW / 2)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="#334155">${b.value}</text>
+          <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${b.color}" opacity="0.80"/>
+          <text x="${x + barW / 2}" y="${baseline + 13}" text-anchor="middle" font-size="10" fill="#6b7280">${b.label}</text>
+          <text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">${b.value}</text>
+          <text x="${x + barW / 2}" y="${y - 16}" text-anchor="middle" font-size="9" fill="#9ca3af">${b.pct}%</text>
         `;
       }).join("");
       const svg = `
         <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <line x1="50" y1="${baseline}" x2="${width - 30}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
+          ${gridLines}
+          <line x1="${x0 - 8}" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#c4cad4" stroke-width="1"/>
           ${rects}
-          <text x="16" y="12" font-size="10" fill="#475569">n=${rows.length}</text>
+          <text x="14" y="13" font-size="10" fill="#6b7280">n=${rows.length}</text>
         </svg>
       `;
       const el = document.getElementById("decMix");
@@ -1164,17 +1255,22 @@ def home() -> str:
         const y = h.signed >= 0 ? baseline - mag : baseline;
         const color = h.signed >= 0 ? "#16a34a" : "#dc2626";
         return `
-          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.88"/>
-          <text x="${x + (barW / 2)}" y="164" text-anchor="middle" font-size="10" fill="#475569">${h.horizon}m</text>
-          <text x="${x + (barW / 2)}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" fill="#334155">${n(h.signed, 1)}</text>
-          <text x="${x + (barW / 2)}" y="176" text-anchor="middle" font-size="9" fill="#64748b">n=${h.count} ${pct(h.accuracy)}</text>
+          <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.78"/>
+          <text x="${x + barW / 2}" y="164" text-anchor="middle" font-size="10" fill="#6b7280">${h.horizon}m</text>
+          <text x="${x + barW / 2}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">${n(h.signed, 1)}</text>
+          <text x="${x + barW / 2}" y="176" text-anchor="middle" font-size="9" fill="#9ca3af">n=${h.count} ${pct(h.accuracy)}</text>
         `;
+      }).join("");
+      const gridLines = [-1, -0.5, 0.5, 1].map((f) => {
+        const gy = baseline - f * 62;
+        return `<line x1="22" y1="${gy}" x2="${width - 22}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
       }).join("");
       const el = document.getElementById("qualityChart");
       if (el) {
         el.innerHTML = `
           <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-            <line x1="28" y1="${baseline}" x2="${width - 28}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"/>
+            ${gridLines}
+            <line x1="22" y1="${baseline}" x2="${width - 22}" y2="${baseline}" stroke="#c4cad4" stroke-width="1" stroke-dasharray="4,3"/>
             ${bars}
           </svg>
         `;
@@ -1374,7 +1470,7 @@ def home() -> str:
       const fullyCovered = items.filter((x) => Number(x.coverage_pct || 0) >= 95).length;
       const summaryEl = document.getElementById("fiSummary");
       if (summaryEl) {
-        summaryEl.textContent = `${n(fullyCovered, 0)} / ${n(items.length, 0)} features have at least 95% populated coverage. Unknown-heavy fields usually indicate older pre-feature samples.`;
+        summaryEl.textContent = `${n(fullyCovered, 0)} / ${n(items.length, 0)} features have at least 95% populated coverage in the scanned rows. Unknown-heavy fields usually indicate older pre-feature samples.`;
       }
       const el = document.getElementById("featureInventoryTable");
       if (!el) return;
