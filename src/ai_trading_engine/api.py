@@ -1243,26 +1243,32 @@ def home() -> str:
         return;
       }
       const width = 520;
-      const height = 180;
-      const baseline = 92;
+      const height = 220;
+      const plotTop = 20;
+      const plotBottom = 148;
+      const baseline = Math.round((plotTop + plotBottom) / 2);
+      const labelY = 178;
+      const metaY = 194;
+      const amplitude = Math.max(24, Math.floor(Math.min(baseline - plotTop, plotBottom - baseline) - 6));
       const maxAbs = Math.max(1, ...entries.map((h) => Math.abs(h.signed)));
       const barW = Math.max(32, Math.min(76, 320 / Math.max(1, entries.length)));
       const gap = 28;
       const x0 = Math.max(34, (width - ((barW + gap) * entries.length)) / 2);
       const bars = entries.map((h, i) => {
-        const mag = Math.abs(h.signed) / maxAbs * 62;
+        const mag = Math.abs(h.signed) / maxAbs * amplitude;
         const x = x0 + i * (barW + gap);
         const y = h.signed >= 0 ? baseline - mag : baseline;
         const color = h.signed >= 0 ? "#16a34a" : "#dc2626";
+        const valueY = h.signed >= 0 ? Math.max(plotTop + 10, y - 7) : Math.min(plotBottom - 8, y + mag + 14);
         return `
           <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.78"/>
-          <text x="${x + barW / 2}" y="164" text-anchor="middle" font-size="10" fill="#6b7280">${h.horizon}m</text>
-          <text x="${x + barW / 2}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">${n(h.signed, 1)}</text>
-          <text x="${x + barW / 2}" y="176" text-anchor="middle" font-size="9" fill="#9ca3af">n=${h.count} ${pct(h.accuracy)}</text>
+          <text x="${x + barW / 2}" y="${valueY}" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">${n(h.signed, 1)}</text>
+          <text x="${x + barW / 2}" y="${labelY}" text-anchor="middle" font-size="10" fill="#6b7280">${h.horizon}m</text>
+          <text x="${x + barW / 2}" y="${metaY}" text-anchor="middle" font-size="9" fill="#9ca3af">n=${h.count} ${pct(h.accuracy)}</text>
         `;
       }).join("");
       const gridLines = [-1, -0.5, 0.5, 1].map((f) => {
-        const gy = baseline - f * 62;
+        const gy = baseline - f * amplitude;
         return `<line x1="22" y1="${gy}" x2="${width - 22}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
       }).join("");
       const el = document.getElementById("qualityChart");
