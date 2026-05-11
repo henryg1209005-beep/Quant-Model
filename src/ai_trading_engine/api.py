@@ -838,6 +838,7 @@ def home() -> str:
       if (an) an.className = overview ? "panel" : "panel active";
       if (b1) b1.className = overview ? "tabbtn active" : "tabbtn";
       if (b2) b2.className = overview ? "tabbtn" : "tabbtn active";
+      if (!overview) refreshAll();
     }
     function showAnalyticsSubtab(tab) {
       const names = ["charts", "quality", "inventory", "patterns", "context", "symbolGate", "cc", "decisions", "trades", "events"];
@@ -848,6 +849,19 @@ def home() -> str:
         if (panel) panel.className = active ? "analytics-panel active span-2" : "analytics-panel span-2";
         if (btn) btn.className = active ? "subtabbtn active" : "subtabbtn";
       }
+      refreshAll();
+    }
+    function analyticsTabActive() {
+      const panel = document.getElementById("panelAnalytics");
+      return Boolean(panel && String(panel.className || "").includes("active"));
+    }
+    function currentAnalyticsSubtab() {
+      const names = ["charts", "quality", "inventory", "patterns", "context", "symbolGate", "cc", "decisions", "trades", "events"];
+      for (const name of names) {
+        const btn = document.getElementById(`subtab${name[0].toUpperCase()}${name.slice(1)}Btn`);
+        if (btn && String(btn.className || "").includes("active")) return name;
+      }
+      return "charts";
     }
 
     function renderKV(elId, obj, keys) {
