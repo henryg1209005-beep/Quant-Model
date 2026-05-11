@@ -40,6 +40,7 @@ from ai_trading_engine.promotion import (
     save_json,
     utc_now_iso,
 )
+from ai_trading_engine.reasoning_analysis import analyze_reasoning, save_reasoning_report
 from ai_trading_engine.research import (
     build_trade_dataset,
     run_walk_forward,
@@ -4445,6 +4446,20 @@ class TradingAppService:
             "allowed": allowed[:50],
             "allowed_count": int(len(allowed)),
         }
+
+    def reasoning_analysis_report(
+        self,
+        *,
+        lookback: int = 5000,
+        min_count: int = 5,
+        top_n: int = 40,
+        save: bool = False,
+    ) -> dict[str, Any]:
+        rows = self._persistence.list_closed_trades(max(1, min(50000, int(lookback))))
+        report = analyze_reasoning(rows, min_count=min_count, top_n=top_n)
+        if save:
+            save_reasoning_report(report)
+        return report
 
     def cell_leaderboard_bootstrap_report(
         self,

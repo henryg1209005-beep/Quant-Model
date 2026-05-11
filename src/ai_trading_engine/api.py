@@ -624,6 +624,7 @@ def home() -> str:
         <button id="subtabInventoryBtn" class="subtabbtn" onclick="showAnalyticsSubtab('inventory')">Feature Inventory</button>
         <button id="subtabPatternsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('patterns')">Pattern Leaderboard</button>
         <button id="subtabContextBtn" class="subtabbtn" onclick="showAnalyticsSubtab('context')">Context Leaderboard</button>
+        <button id="subtabReasoningBtn" class="subtabbtn" onclick="showAnalyticsSubtab('reasoning')">Reasoning Patterns</button>
         <button id="subtabSymbolGateBtn" class="subtabbtn" onclick="showAnalyticsSubtab('symbolGate')">Symbol Gate</button>
         <button id="subtabCCBtn" class="subtabbtn" onclick="showAnalyticsSubtab('cc')">Champion vs Challenger</button>
         <button id="subtabDecisionsBtn" class="subtabbtn" onclick="showAnalyticsSubtab('decisions')">Decisions</button>
@@ -762,6 +763,33 @@ def home() -> str:
             <h3>Context States</h3>
             <div id="clSummary" class="small" style="margin:0 0 8px 0">-</div>
             <div class="table-wrap"><table id="contextLeaderboardTable"></table></div>
+          </div>
+        </div>
+
+        <div id="analyticsReasoningPanel" class="analytics-panel span-2">
+          <div class="kpi-section">
+            <div class="kpi-section-label">Reasoning Patterns</div>
+            <div class="kpis">
+              <div class="card"><div class="kpi-label">Trades Analysed</div><div id="raAnalyzed" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Overall Win Rate</div><div id="raWinRate" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Phrases Found</div><div id="raPhraseCount" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Generated</div><div id="raGenAt" class="kpi-val">-</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Top Predictive Phrases &mdash; Wins <span style="font-weight:400;font-size:11px;color:#9ca3af">(positive lift vs baseline win rate &bull; p&lt;0.05 in bold)</span></h3>
+            <div class="table-wrap"><table id="raWinTable"></table></div>
+          </div>
+          <div class="card">
+            <h3>Top Predictive Phrases &mdash; Losses <span style="font-weight:400;font-size:11px;color:#9ca3af">(negative lift &bull; p&lt;0.05 in bold)</span></h3>
+            <div class="table-wrap"><table id="raLossTable"></table></div>
+          </div>
+          <div class="card span-2" style="font-size:11px;color:#6b7280;line-height:1.6">
+            <strong>Methodology:</strong> Unigrams (&ge;3 chars, non-stopword) and bigrams are extracted from each LLM reasoning string.
+            Each phrase is tested for association with win/loss outcome using a 2&times;2 chi-squared test (Yates correction, 1 df).
+            <em>Lift</em> = (phrase win rate &minus; overall win rate) / overall win rate.
+            Min count = 5. Results are reproducible from raw trade data.
+            <button class="research" style="margin-left:12px" onclick="runResearch('/api/research/reasoning-analysis?save=true', 'Reasoning report saved')">Save Report</button>
           </div>
         </div>
 
@@ -907,7 +935,7 @@ def home() -> str:
       if (!overview) refreshAll();
     }
     function showAnalyticsSubtab(tab) {
-      const names = ["charts", "quality", "inventory", "patterns", "context", "symbolGate", "cc", "decisions", "trades", "events"];
+      const names = ["charts", "quality", "inventory", "patterns", "context", "reasoning", "symbolGate", "cc", "decisions", "trades", "events"];
       for (const name of names) {
         const panel = document.getElementById(`analytics${name[0].toUpperCase()}${name.slice(1)}Panel`);
         const btn = document.getElementById(`subtab${name[0].toUpperCase()}${name.slice(1)}Btn`);
@@ -922,7 +950,7 @@ def home() -> str:
       return Boolean(panel && String(panel.className || "").includes("active"));
     }
     function currentAnalyticsSubtab() {
-      const names = ["charts", "quality", "inventory", "patterns", "context", "symbolGate", "cc", "decisions", "trades", "events"];
+      const names = ["charts", "quality", "inventory", "patterns", "context", "reasoning", "symbolGate", "cc", "decisions", "trades", "events"];
       for (const name of names) {
         const btn = document.getElementById(`subtab${name[0].toUpperCase()}${name.slice(1)}Btn`);
         if (btn && String(btn.className || "").includes("active")) return name;
@@ -1539,6 +1567,34 @@ def home() -> str:
         <tbody>${body || '<tr><td colspan="10" class="small">No context leaderboard rows yet</td></tr>'}</tbody>
       `;
     }
+    function renderReasoningAnalysis(report) {
+      const ra = (report || {}).reasoning_analysis || {};
+      if (!ra.ok) return;
+      document.getElementById("raAnalyzed").textContent = n(ra.analyzed_count, 0) + " / " + n(ra.total_count, 0);
+      document.getElementById("raWinRate").textContent = pct(ra.overall_win_rate);
+      document.getElementById("raPhraseCount").textContent = n(ra.phrase_count, 0);
+      document.getElementById("raGenAt").textContent = fmtTs(ra.generated_at);
+      const phrases = ra.phrases || [];
+      const pos = phrases.filter((p) => p.lift > 0).slice(0, 20);
+      const neg = phrases.filter((p) => p.lift < 0).slice(0, 20);
+      const hdr = `<thead><tr><th>Phrase</th><th>N</th><th>Wins</th><th>Win%</th><th>Lift</th><th>p-value</th></tr></thead>`;
+      const mkRow = (p) => {
+        const sig = p.p_value < 0.05;
+        const liftColor = p.lift > 0 ? "#16a34a" : "#dc2626";
+        return `<tr${sig ? ' style="font-weight:600"' : ""}>
+          <td>${esc(p.phrase)}</td>
+          <td>${p.count}</td>
+          <td>${p.win_count}</td>
+          <td>${pct(p.win_rate)}</td>
+          <td style="color:${liftColor}">${p.lift > 0 ? "+" : ""}${(p.lift * 100).toFixed(1)}%</td>
+          <td style="color:${sig ? "#374151" : "#9ca3af"}">${p.p_value.toFixed(3)}${sig ? " ✓" : ""}</td>
+        </tr>`;
+      };
+      const winEl = document.getElementById("raWinTable");
+      if (winEl) winEl.innerHTML = hdr + `<tbody>${pos.map(mkRow).join("") || '<tr><td colspan="6" class="small">No positive phrases yet</td></tr>'}</tbody>`;
+      const lossEl = document.getElementById("raLossTable");
+      if (lossEl) lossEl.innerHTML = hdr + `<tbody>${neg.map(mkRow).join("") || '<tr><td colspan="6" class="small">No negative phrases yet</td></tr>'}</tbody>`;
+    }
     function renderSymbolGate(report) {
       const sg = (report || {}).symbol_performance || {};
       const rows = sg.rows || [];
@@ -1837,7 +1893,8 @@ def home() -> str:
           guardsRes,
           causesRes,
           automationRes,
-          readinessRes
+          readinessRes,
+          reasoningRes
         ] = await Promise.all([
           fetchJson("/api/status"),
           fetchJson("/api/account"),
@@ -1893,6 +1950,9 @@ def home() -> str:
             : Promise.resolve({}),
           analyticsActive && activeAnalyticsSubtab === "context"
             ? fetchJson("/api/research/context-leaderboard?lookback=20000&horizons=15,30&quality_mode=good_only&min_labels=5&stress_bps=3&min_accuracy=0.5")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "reasoning"
+            ? fetchJson("/api/research/reasoning-analysis?lookback=5000&min_count=5&top_n=40")
             : Promise.resolve({})
         ]);
 
@@ -1947,6 +2007,7 @@ def home() -> str:
         if (inventoryRes.feature_inventory) renderFeatureInventory(inventoryRes);
         if (patternRes.pattern_leaderboard) renderPatternLeaderboard(patternRes);
         if (contextRes.context_leaderboard) renderContextLeaderboard(contextRes);
+        if (reasoningRes.reasoning_analysis) renderReasoningAnalysis(reasoningRes);
 
         document.getElementById("kBalance").textContent = n(account.balance);
         document.getElementById("kPnl").textContent = n(account.daily_realized_pnl);
@@ -2259,6 +2320,23 @@ def api_context_leaderboard(
             min_labels=min_labels,
             stress_bps=stress_bps,
             min_accuracy=min_accuracy,
+        )
+    }
+
+
+@app.get("/api/research/reasoning-analysis")
+def api_reasoning_analysis(
+    lookback: int = Query(default=5000, ge=1, le=50000),
+    min_count: int = Query(default=5, ge=1, le=500),
+    top_n: int = Query(default=40, ge=5, le=200),
+    save: bool = Query(default=False),
+) -> dict:
+    return {
+        "reasoning_analysis": service.reasoning_analysis_report(
+            lookback=lookback,
+            min_count=min_count,
+            top_n=top_n,
+            save=save,
         )
     }
 
