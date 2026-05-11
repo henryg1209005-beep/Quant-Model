@@ -1685,6 +1685,7 @@ def home() -> str:
         const analyticsActive = analyticsTabActive();
         const activeAnalyticsSubtab = currentAnalyticsSubtab();
         const needWideHistory = analyticsActive && activeAnalyticsSubtab === "charts";
+        const fastFirstLoad = !analyticsActive && !window.__apexHydrated;
         const [
           status,
           account,
@@ -1724,14 +1725,14 @@ def home() -> str:
           needWideHistory ? fetchJson("/api/decisions?limit=80") : Promise.resolve({ items: [] }),
           needWideHistory ? fetchJson("/api/trades?limit=80") : Promise.resolve({ items: [] }),
           fetchJson("/api/go-live-gate"),
-          fetchJson("/api/audit?limit=20"),
-          fetchJson("/api/notifications?limit=20"),
+          fastFirstLoad ? Promise.resolve({ items: [] }) : fetchJson("/api/audit?limit=20"),
+          fastFirstLoad ? Promise.resolve({ items: [] }) : fetchJson("/api/notifications?limit=20"),
           fetchJson("/api/session-config"),
-          fetchJson("/api/acceleration"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/acceleration"),
           analyticsActive && activeAnalyticsSubtab === "quality"
             ? fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only")
             : Promise.resolve({}),
-          fetchJson("/api/model-monitoring"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/model-monitoring"),
           analyticsActive && activeAnalyticsSubtab === "symbolGate"
             ? fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only")
             : Promise.resolve({}),
@@ -1747,10 +1748,10 @@ def home() -> str:
           analyticsActive && activeAnalyticsSubtab === "symbolGate"
             ? fetchJson("/api/research/cell-leaderboard-bootstrap?lookback=20000&horizons=5,15,30&quality_mode=good_only&min_labels=12&n_bootstrap=120&robust_only=false")
             : Promise.resolve({}),
-          fetchJson("/api/autonomy/health-score"),
-          fetchJson("/api/automation/guards"),
-          fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
-          fetchJson("/api/automation"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/autonomy/health-score"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/automation/guards"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/autonomy/error-causes?window_minutes=1440"),
+          fastFirstLoad ? Promise.resolve({}) : fetchJson("/api/automation"),
           fetchJson("/api/data-readiness?lookback=2000"),
           analyticsActive && activeAnalyticsSubtab === "inventory"
             ? fetchJson("/api/research/feature-inventory?lookback=2000")
@@ -1880,6 +1881,12 @@ def home() -> str:
         }
 
         setHeaderChips(status, gate);
+        if (fastFirstLoad) {
+          window.__apexHydrated = true;
+          setTimeout(() => { refreshAll(); }, 0);
+        } else {
+          window.__apexHydrated = true;
+        }
       } catch (e) {
         setFlash(String(e));
       }
