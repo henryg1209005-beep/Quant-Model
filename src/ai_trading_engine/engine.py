@@ -211,16 +211,25 @@ class TradingEngine:
         client: LlmClient,
         llm_context: str,
         *,
-        max_attempts: int = 2,
+        max_attempts: int = 3,
     ) -> tuple[str, AiDecision]:
         raw_last = ""
         for attempt in range(max(1, int(max_attempts))):
             if attempt == 0:
                 prompt = SYSTEM_PROMPT
+            elif attempt == 1:
+                prompt = (
+                    SYSTEM_PROMPT
+                    + "\n\nReturn ONLY a valid JSON object that matches the required schema. "
+                    + "No markdown fences. No commentary. Keep reasoning to 160 characters max."
+                )
             else:
                 prompt = (
                     SYSTEM_PROMPT
-                    + "\n\nReturn ONLY a valid JSON object that matches the required schema."
+                    + "\n\nREPAIR MODE: return one minified JSON object on a single line with exactly these keys: "
+                    + "action,direction,confidence,size,sl_ticks,tp_ticks,forecast_direction,forecast_confidence,"
+                    + "forecast_horizon_minutes,reasoning. "
+                    + "If uncertain, set action to hold. Keep reasoning under 160 characters."
                 )
             raw = client.decide(prompt, llm_context)
             raw_last = raw

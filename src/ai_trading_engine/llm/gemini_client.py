@@ -102,8 +102,18 @@ class GeminiLlmClient(LlmClient):
         candidates = data.get("candidates") or []
         if not candidates:
             raise RuntimeError(f"Gemini returned no candidates: {data}")
-        parts = ((candidates[0].get("content") or {}).get("parts") or [])
-        text = "".join(str(part.get("text") or "") for part in parts).strip()
+        text = ""
+        finish_reasons: list[str] = []
+        for candidate in candidates:
+            finish_reason = str(candidate.get("finishReason") or "").strip()
+            if finish_reason:
+                finish_reasons.append(finish_reason)
+            parts = ((candidate.get("content") or {}).get("parts") or [])
+            candidate_text = "".join(str(part.get("text") or "") for part in parts).strip()
+            if candidate_text:
+                text = candidate_text
+                break
         if not text:
-            raise RuntimeError(f"Gemini returned empty content: {data}")
+            reason_text = ",".join(finish_reasons) if finish_reasons else "unknown"
+            raise RuntimeError(f"Gemini returned empty content: finish_reason={reason_text} payload={data}")
         return text

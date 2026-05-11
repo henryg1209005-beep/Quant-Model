@@ -21,6 +21,7 @@ Rules:
 - Always include a prediction-only forecast, even when action is hold:
   forecast_direction must be LONG or SHORT, forecast_confidence must be 0.0-1.0.
   This forecast is for research labelling and does not imply permission to trade.
+- Keep reasoning concise: plain text, no markdown, no line breaks, maximum 160 characters.
 - Output JSON only with schema:
   {
     \"action\": \"trade\" | \"hold\",

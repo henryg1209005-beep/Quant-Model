@@ -2,6 +2,7 @@
 
 import unittest
 
+from ai_trading_engine.context_builder import SYSTEM_PROMPT
 from ai_trading_engine.llm.parser import parse_decision
 
 
@@ -45,6 +46,26 @@ class TestParser(unittest.TestCase):
         d = parse_decision(raw)
         self.assertEqual(d.action, "trade")
         self.assertEqual(d.direction, "SHORT")
+
+    def test_parse_decision_from_key_value_block(self) -> None:
+        raw = """
+action: hold
+confidence: 0.41
+size: 1
+sl_ticks: 0
+tp_ticks: 0
+forecast_direction: LONG
+forecast_confidence: 0.62
+forecast_horizon_minutes: 15
+reasoning: compact repair output
+"""
+        d = parse_decision(raw)
+        self.assertEqual(d.action, "hold")
+        self.assertEqual(d.forecast_direction, "LONG")
+        self.assertEqual(d.forecast_confidence, 0.62)
+
+    def test_system_prompt_requests_compact_reasoning(self) -> None:
+        self.assertIn("maximum 160 characters", SYSTEM_PROMPT)
 
 
 if __name__ == "__main__":
