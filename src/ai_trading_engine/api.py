@@ -198,6 +198,11 @@ def home() -> str:
       letter-spacing: 0.07em;
       margin-bottom: 3px;
     }
+    .blocker {
+      display: block;
+      margin-top: 2px;
+      line-height: 1.3;
+    }
     .blocker { display: block; margin-top: 2px; line-height: 1.3; }
     .blocker-label {
       display: inline-block;
@@ -314,8 +319,8 @@ def home() -> str:
       margin: 0 0 12px;
       font-size: 10px;
       letter-spacing: 0.08em;
-      text-transform: uppercase;
       color: var(--muted);
+      text-transform: uppercase;
       font-weight: 700;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--line);
@@ -644,6 +649,10 @@ def home() -> str:
               </div>
             </div>
           </div>
+          <div class="chart-card" style="grid-column: 1 / -1">
+            <div class="chart-title">Trade Outcome Space &mdash; Sequence &times; Size &times; PnL &nbsp;<span style="font-weight:400;font-size:10px;color:#9ca3af">(drag to rotate &bull; scroll to zoom &bull; hover for details)</span></div>
+            <div id="tradeScatter3d"></div>
+          </div>
         </div>
 
         <div id="analyticsQualityPanel" class="analytics-panel span-2">
@@ -826,6 +835,7 @@ def home() -> str:
     </div>
   </div>
 
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <script>
     function pad2(v) {
       return String(v).padStart(2, "0");
@@ -1205,6 +1215,90 @@ def home() -> str:
       const el = document.getElementById("decMix");
       if (el) el.innerHTML = svg;
     }
+    function renderTradeScatter3D(trades) {
+      const el = document.getElementById("tradeScatter3d");
+      if (!el) return;
+      if (typeof Plotly === "undefined") {
+        el.innerHTML = '<div class="chart-empty" style="height:340px;display:flex;align-items:center;justify-content:center">3D chart requires a network connection to load Plotly</div>';
+        return;
+      }
+      const items = (trades || []).filter((t) => t.entry_price != null && t.pnl != null);
+      if (items.length < 3) {
+        if (el._plotlyInited) { Plotly.purge(el); el._plotlyInited = false; }
+        el.innerHTML = '<div class="chart-empty" style="height:340px;display:flex;align-items:center;justify-content:center">Need at least 3 closed trades to render</div>';
+        return;
+      }
+      if (el.querySelector(".chart-empty")) el.innerHTML = "";
+      const longs  = items.filter((t) => String(t.direction || "").toUpperCase() === "LONG");
+      const shorts = items.filter((t) => String(t.direction || "").toUpperCase() === "SHORT");
+      const mkTrace = (subset, name, color) => ({
+        type: "scatter3d",
+        mode: "markers",
+        name,
+        x: subset.map((_, i) => i + 1),
+        y: subset.map((t) => Number(t.size || 0)),
+        z: subset.map((t) => Number(t.pnl || 0)),
+        text: subset.map((t) => [
+          `<b>${t.symbol || "—"} ${t.direction || ""}</b>`,
+          fmtTs(t.timestamp),
+          `Entry ${n(t.entry_price)} → Exit ${n(t.exit_price)}`,
+          `PnL: ${n(t.pnl)}  |  Size: ${n(t.size, 0)}`,
+        ].join("<br>")),
+        hovertemplate: "%{text}<extra></extra>",
+        marker: {
+          size: subset.map((t) => Math.max(4, Math.min(13, 4 + Math.abs(Number(t.pnl || 0)) * 0.5))),
+          color,
+          opacity: 0.82,
+          line: { width: 0.5, color: "rgba(255,255,255,0.4)" },
+        },
+      });
+      const traces = [];
+      if (longs.length)  traces.push(mkTrace(longs,  "LONG",  "#16a34a"));
+      if (shorts.length) traces.push(mkTrace(shorts, "SHORT", "#dc2626"));
+      const axStyle = (title) => ({
+        title: { text: title, font: { size: 10, color: "#6b7280" } },
+        gridcolor: "#e1e4ea",
+        gridwidth: 1,
+        zerolinecolor: "#94a3b8",
+        zerolinewidth: 1,
+        tickfont: { size: 9, color: "#9ca3af" },
+        showbackground: true,
+        backgroundcolor: "#f9fafb",
+      });
+      const layout = {
+        height: 360,
+        margin: { l: 0, r: 0, t: 4, b: 0 },
+        paper_bgcolor: "#f9fafb",
+        scene: {
+          xaxis: axStyle("Trade #"),
+          yaxis: axStyle("Size"),
+          zaxis: { ...axStyle("PnL"), zerolinewidth: 2, zerolinecolor: "#6b7280" },
+          camera: { eye: { x: 1.55, y: 1.2, z: 0.85 } },
+          dragmode: "turntable",
+          aspectmode: "auto",
+        },
+        legend: {
+          x: 0.01, y: 0.98,
+          font: { size: 11, color: "#374151", family: '"Inter","Segoe UI",system-ui,sans-serif' },
+          bgcolor: "rgba(255,255,255,0.82)", bordercolor: "#e1e4ea", borderwidth: 1,
+        },
+        font: { family: '"Inter","Segoe UI",system-ui,sans-serif', size: 10 },
+        hoverlabel: { bgcolor: "#0d1117", bordercolor: "#2d3a4a", font: { size: 11, color: "#f1f5f9", family: '"Inter","Segoe UI",system-ui,sans-serif' } },
+      };
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ["toImage", "sendDataToCloud", "select2d", "lasso2d"],
+      };
+      if (el._plotlyInited) {
+        Plotly.react(el, traces, layout, config);
+      } else {
+        Plotly.newPlot(el, traces, layout, config);
+        el._plotlyInited = true;
+      }
+    }
+
     function metricRows(obj) {
       return Object.entries(obj || {})
         .map(([name, m]) => ({ name, ...(m || {}) }))
@@ -1265,22 +1359,25 @@ def home() -> str:
         const valueY = h.signed >= 0 ? Math.max(plotTop + 12, y - 8) : Math.min(plotBottom - 10, y + mag + 16);
         return `
           <rect x="${x}" y="${y}" width="${barW}" height="${Math.max(2, mag)}" fill="${color}" opacity="0.78"/>
-          <text x="${x + barW / 2}" y="${valueY}" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">${n(h.signed, 1)}</text>
-          <text x="${x + barW / 2}" y="${labelY}" text-anchor="middle" font-size="12" fill="#6b7280">${h.horizon}m</text>
-          <text x="${x + barW / 2}" y="${metaY}" text-anchor="middle" font-size="10" fill="#9ca3af">n=${h.count} ${pct(h.accuracy)}</text>
+          <text x="${x + barW / 2}" y="164" text-anchor="middle" font-size="10" fill="#6b7280">${h.horizon}m</text>
+          <text x="${x + barW / 2}" y="${h.signed >= 0 ? y - 5 : y + mag + 12}" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">${n(h.signed, 1)}</text>
+          <text x="${x + barW / 2}" y="176" text-anchor="middle" font-size="9" fill="#9ca3af">n=${h.count} ${pct(h.accuracy)}</text>
         `;
       }).join("");
       const gridLines = [-1, -0.5, 0.5, 1].map((f) => {
-        const gy = baseline - f * amplitude;
+        const gy = baseline - f * 62;
         return `<line x1="22" y1="${gy}" x2="${width - 22}" y2="${gy}" stroke="#e1e4ea" stroke-width="1"/>`;
       }).join("");
-      el.innerHTML = `
-        <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="height:260px">
-          ${gridLines}
-          <line x1="22" y1="${baseline}" x2="${width - 22}" y2="${baseline}" stroke="#c4cad4" stroke-width="1" stroke-dasharray="4,3"/>
-          ${bars}
-        </svg>
-      `;
+      const el = document.getElementById("qualityChart");
+      if (el) {
+        el.innerHTML = `
+          <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+            ${gridLines}
+            <line x1="22" y1="${baseline}" x2="${width - 22}" y2="${baseline}" stroke="#c4cad4" stroke-width="1" stroke-dasharray="4,3"/>
+            ${bars}
+          </svg>
+        `;
+      }
     }
     function renderPredictionQuality(report, controls) {
       const q = (report || {}).prediction_quality || {};
@@ -1801,7 +1898,65 @@ def home() -> str:
         const analyticsActive = analyticsTabActive();
         const activeAnalyticsSubtab = currentAnalyticsSubtab();
         const needWideHistory = analyticsActive && activeAnalyticsSubtab === "charts";
-        const fastFirstLoad = !analyticsActive && !window.__apexHydrated;
+        const [
+          status,
+          account,
+          cfgRes,
+          metricsRes,
+          decRes,
+          trRes,
+          decWideRes,
+          trWideRes,
+          gateRes,
+          auditRes,
+          notifRes,
+          sessionRes,
+          accelRes,
+          qualityRes,
+          inventoryRes,
+          monitorRes,
+          symbolPerfRes,
+          patternRes,
+          contextRes,
+          controlsRes,
+          ccRes,
+          ccShortRes,
+          cbRes,
+          autoHealthRes,
+          guardsRes,
+          causesRes,
+          automationRes,
+          readinessRes
+        ] = await Promise.all([
+          fetchJson("/api/status"),
+          fetchJson("/api/account"),
+          fetchJson("/api/config"),
+          fetchJson("/api/metrics"),
+          fetchJson("/api/decisions?limit=15"),
+          fetchJson("/api/trades?limit=15"),
+          needWideHistory ? fetchJson("/api/decisions?limit=80") : Promise.resolve({ items: [] }),
+          needWideHistory ? fetchJson("/api/trades?limit=80") : Promise.resolve({ items: [] }),
+          fetchJson("/api/go-live-gate"),
+          fetchJson("/api/audit?limit=20"),
+          fetchJson("/api/notifications?limit=20"),
+          fetchJson("/api/session-config"),
+          fetchJson("/api/acceleration"),
+          analyticsActive && activeAnalyticsSubtab === "quality"
+            ? fetchJson("/api/research/prediction-quality?lookback=600&horizons=5,15,30&min_confidence=0&quality_mode=good_only")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "inventory"
+            ? fetchJson("/api/research/feature-inventory?lookback=2000")
+            : Promise.resolve({}),
+          fetchJson("/api/model-monitoring"),
+          analyticsActive && activeAnalyticsSubtab === "symbolGate"
+            ? fetchJson("/api/research/symbol-performance?lookback=20000&horizon_minutes=15&quality_mode=good_only")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "patterns"
+            ? fetchJson("/api/research/pattern-leaderboard?lookback=20000&horizons=15,30&quality_mode=good_only&min_labels=5&stress_bps=3&min_accuracy=0.5")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "context"
+            ? fetchJson("/api/research/context-leaderboard?lookback=20000&horizons=15,30&quality_mode=good_only&min_labels=5&stress_bps=3&min_accuracy=0.5")
+            : Promise.resolve({}),
           analyticsActive && activeAnalyticsSubtab === "quality"
             ? fetchJson("/api/quality-controls")
             : Promise.resolve({}),
@@ -1873,6 +2028,7 @@ def home() -> str:
         renderEquityChart(tradesWide);
         renderPnlHistogram(tradesWide);
         renderDecisionMix(decisionsWide);
+        if (needWideHistory) renderTradeScatter3D(tradesWide);
         if (qualityRes.prediction_quality) renderPredictionQuality(qualityRes, controlsRes);
         if (symbolPerfRes.symbol_performance) renderSymbolGate(symbolPerfRes);
         if (ccRes.champion_challenger_daily) renderChampionChallenger(ccRes, ccShortRes);

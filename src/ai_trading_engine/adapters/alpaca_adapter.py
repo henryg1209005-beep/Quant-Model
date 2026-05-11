@@ -3,6 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -77,8 +78,26 @@ class AlpacaMarketDataAdapter(MarketDataAdapter):
         req = Request(url)
         req.add_header("APCA-API-KEY-ID", self._key)
         req.add_header("APCA-API-SECRET-KEY", self._secret)
-        with urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            with urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+                parsed = json.loads(body) if body else {}
+                if isinstance(parsed, dict):
+                    detail = str(parsed.get("message") or parsed.get("error") or "")
+                if not detail:
+                    detail = body[:240]
+            except Exception:
+                detail = ""
+            msg = f"Alpaca data request failed ({exc.code}) on {path}"
+            if detail:
+                msg = f"{msg}: {detail}"
+            raise RuntimeError(msg) from exc
+        except URLError as exc:
+            raise RuntimeError(f"Alpaca data request network failure on {path}: {exc.reason}") from exc
 
     def get_historical_bars(
         self,

@@ -51,6 +51,8 @@ def _hold_decision(reason: str) -> AiDecision:
         sl_ticks=0,
         tp_ticks=0,
         reasoning=reason,
+        confidence_source="rule",
+        forecast_confidence_source="rule",
     )
 
 
@@ -192,6 +194,8 @@ class TradingEngine:
     def _should_escalate_to_secondary(self, decision: AiDecision) -> tuple[bool, str]:
         if self.llm_secondary is None:
             return False, "secondary_disabled"
+        confidence_ready = self._confidence_signal_ready()
+        mode = str(self.settings.confidence_calibration_mode or "auto").strip().lower()
         conf = max(0.0, min(1.0, float(decision.confidence)))
         lo = float(self.settings.llm_two_tier_min_confidence)
         hi = float(self.settings.llm_two_tier_max_confidence)
@@ -200,8 +204,12 @@ class TradingEngine:
             if decision.action != "trade":
                 return False, "not_trade"
             if bool(self.settings.llm_two_tier_require_confidence_band):
+                if not confidence_ready:
+                    return False, f"confidence_signal_not_ready:{mode}"
                 return (in_band, f"trade_confidence_band={lo:.2f}-{hi:.2f}" if in_band else "trade_outside_band")
             return True, "trade_action"
+        if not confidence_ready:
+            return False, f"confidence_signal_not_ready:{mode}"
         if in_band:
             return True, f"confidence_band={lo:.2f}-{hi:.2f}"
         return False, "not_triggered"
@@ -373,6 +381,8 @@ class TradingEngine:
             forecast_direction=decision.forecast_direction,
             forecast_confidence=float(decision.forecast_confidence),
             forecast_horizon_minutes=int(decision.forecast_horizon_minutes),
+            confidence_source=str(decision.confidence_source or "model"),
+            forecast_confidence_source=str(decision.forecast_confidence_source or decision.confidence_source or "model"),
         )
 
     def _build_state_signature(self, quote, context, event_risk: str, news_risk: str) -> dict[str, Any]:
@@ -443,7 +453,17 @@ class TradingEngine:
             "symbol_bin_stressed_bps": dict(payload.get("symbol_bin_stressed_bps") or {}),
             "symbol_direction_policy": dict(payload.get("symbol_direction_policy") or {}),
             "symbol_blocked_directions": dict(payload.get("symbol_blocked_directions") or {}),
+            "confidence_signal_ready": bool(payload.get("confidence_signal_ready", False)),
+            "confidence_signal_mode": str(payload.get("confidence_signal_mode", "auto") or "auto").strip().lower(),
         }
+
+    def _confidence_signal_ready(self) -> bool:
+        mode = str(self.settings.confidence_calibration_mode or "auto").strip().lower()
+        if mode == "force":
+            return True
+        if mode == "off":
+            return False
+        return bool((self._confidence_controls or {}).get("confidence_signal_ready", False))
 
     def set_regime_controls(self, controls: dict[str, Any]) -> None:
         payload = dict(controls or {})
@@ -758,7 +778,7 @@ class TradingEngine:
         return "midday"
 
     def _ev_ticks(self, decision: AiDecision) -> float:
-        p = max(0.0, min(1.0, float(decision.confidence)))
+        p = 0.5 if not self._confidence_signal_ready() else max(0.0, min(1.0, float(decision.confidence)))
         tp = max(0.0, float(decision.tp_ticks))
         sl = max(0.0, float(decision.sl_ticks))
         return (p * tp) - ((1.0 - p) * sl)
@@ -854,6 +874,8 @@ class TradingEngine:
         if skip_llm and self._last_llm_decision is not None:
             decision = self._clone_decision(self._last_llm_decision)
             raw = self._last_llm_raw
+            decision.confidence_source = "cached"
+            decision.forecast_confidence_source = "cached"
             decision.reasoning = f"{decision.reasoning} [cached:{skip_reason}]".strip()
             llm_routing["state_gate_used_cache"] = True
             llm_routing["state_gate_reason"] = skip_reason
@@ -919,6 +941,8 @@ class TradingEngine:
                     if self._last_llm_decision is not None:
                         decision = self._clone_decision(self._last_llm_decision)
                         raw = self._last_llm_raw
+                        decision.confidence_source = "cached"
+                        decision.forecast_confidence_source = "cached"
                         decision.reasoning = f"{decision.reasoning} [fallback:last_valid_decision]".strip()
                         llm_routing["state_gate_used_cache"] = True
                         llm_routing["state_gate_reason"] = f"primary_exception_fallback_cache:{self._exc_brief(primary_exc)}"
@@ -931,6 +955,8 @@ class TradingEngine:
                         decision.forecast_direction = "LONG" if self._get_dim_value(context, "Trend", 0.0) >= 0 else "SHORT"
                         decision.forecast_confidence = 0.5
                         decision.forecast_horizon_minutes = 15
+                        decision.confidence_source = "fallback"
+                        decision.forecast_confidence_source = "fallback"
                         raw = ""
                         llm_routing["state_gate_used_cache"] = True
                         llm_routing["state_gate_reason"] = f"llm_unavailable_deterministic_hold:{self._exc_brief(primary_exc)}"
@@ -1175,6 +1201,8 @@ class TradingEngine:
                 "features": {
                     "dimensions": dim_features,
                     "key_levels": dict(context.key_levels or {}),
+                    "patterns": dict(context.pattern_features or {}),
+                    "structure": dict(context.structure_features or {}),
                     "trend_score": float(self._get_dim_value(context, "Trend", 0.0)),
                     "momentum_score": float(self._get_dim_value(context, "Momentum", 0.0)),
                     "mean_reversion_score": float(self._get_dim_value(context, "Mean Reversion", 0.0)),

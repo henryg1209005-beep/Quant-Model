@@ -90,6 +90,19 @@ def _get_csv(name: str, default: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _get_csv_lower(name: str, default: str) -> tuple[str, ...]:
+    raw = os.getenv(name, default)
+    values: list[str] = []
+    seen: set[str] = set()
+    for part in raw.split(","):
+        item = part.strip().lower()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        values.append(item)
+    return tuple(values)
+
+
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -222,6 +235,10 @@ class Settings:
     confidence_control_min_symbol_labels: int
     confidence_control_min_threshold_labels: int
     confidence_control_default_min_confidence: float
+    confidence_calibration_mode: str
+    confidence_calibration_min_populated_bins: int
+    confidence_calibration_min_labels_per_bin: int
+    confidence_calibration_allowed_sources: tuple[str, ...]
     calibration_gate_enabled: bool
     calibration_gate_stress_bps: float
     data_acceleration_mode: bool
@@ -515,6 +532,13 @@ DEFAULT_SETTINGS = Settings(
     confidence_control_min_symbol_labels=_get_int("CONFIDENCE_CONTROL_MIN_SYMBOL_LABELS", 40),
     confidence_control_min_threshold_labels=_get_int("CONFIDENCE_CONTROL_MIN_THRESHOLD_LABELS", 30),
     confidence_control_default_min_confidence=_get_float("CONFIDENCE_CONTROL_DEFAULT_MIN_CONFIDENCE", 0.55),
+    confidence_calibration_mode=os.getenv("CONFIDENCE_CALIBRATION_MODE", "auto").strip().lower(),
+    confidence_calibration_min_populated_bins=_get_int("CONFIDENCE_CALIBRATION_MIN_POPULATED_BINS", 3),
+    confidence_calibration_min_labels_per_bin=_get_int("CONFIDENCE_CALIBRATION_MIN_LABELS_PER_BIN", 30),
+    confidence_calibration_allowed_sources=_get_csv_lower(
+        "CONFIDENCE_CALIBRATION_ALLOWED_SOURCES",
+        "model,cached",
+    ),
     calibration_gate_enabled=_get_bool("CALIBRATION_GATE_ENABLED", True),
     calibration_gate_stress_bps=_get_float("CALIBRATION_GATE_STRESS_BPS", 3.0),
     data_acceleration_mode=_get_bool("DATA_ACCELERATION_MODE", False),

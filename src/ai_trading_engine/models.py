@@ -87,6 +87,8 @@ class AiDecision:
     forecast_direction: Direction | None = None
     forecast_confidence: float = 0.0
     forecast_horizon_minutes: int = 15
+    confidence_source: str = "model"
+    forecast_confidence_source: str = "model"
 
 
 @dataclass
@@ -102,6 +104,8 @@ class MarketContext:
     dimensions: list[ContextDimension]
     key_levels: dict[str, float]
     gex_overlay: dict[str, float | str] | None = None
+    pattern_features: dict | None = None
+    structure_features: dict | None = None
 
 
 @dataclass

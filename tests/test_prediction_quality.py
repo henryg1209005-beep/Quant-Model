@@ -176,6 +176,79 @@ class TestPredictionQuality(unittest.TestCase):
         self.assertEqual(by_direction["LONG"]["status"], "allow")
         self.assertEqual(by_direction["SHORT"]["status"], "block")
 
+    def test_confidence_control_report_excludes_fallback_rows_and_tracks_readiness(self) -> None:
+        samples = []
+        for idx, conf in enumerate((0.55, 0.65, 0.75)):
+            base_hour = 13 + idx
+            for minute in (0, 1):
+                ts = f"2026-04-29T{base_hour:02d}:{minute:02d}:00+00:00"
+                future = f"2026-04-29T{base_hour:02d}:{minute + 15:02d}:00+00:00"
+                samples.append(
+                    {
+                        "timestamp": ts,
+                        "symbol": "SPY",
+                        "quote_last": 100.0,
+                        "forecast_direction": "LONG",
+                        "forecast_confidence": conf,
+                        "forecast_confidence_source": "model",
+                        "sample_quality_good": True,
+                    }
+                )
+                samples.append(
+                    {
+                        "timestamp": future,
+                        "symbol": "SPY",
+                        "quote_last": 101.0,
+                        "forecast_direction": "LONG",
+                        "forecast_confidence": conf,
+                        "forecast_confidence_source": "model",
+                        "sample_quality_good": True,
+                    }
+                )
+        for minute in (0, 1):
+            ts = f"2026-04-29T16:{minute:02d}:00+00:00"
+            future = f"2026-04-29T16:{minute + 15:02d}:00+00:00"
+            samples.append(
+                {
+                    "timestamp": ts,
+                    "symbol": "SPY",
+                    "quote_last": 100.0,
+                    "forecast_direction": "LONG",
+                    "forecast_confidence": 0.95,
+                    "forecast_confidence_source": "fallback",
+                    "sample_quality_good": True,
+                }
+            )
+            samples.append(
+                {
+                    "timestamp": future,
+                    "symbol": "SPY",
+                    "quote_last": 101.0,
+                    "forecast_direction": "LONG",
+                    "forecast_confidence": 0.95,
+                    "forecast_confidence_source": "fallback",
+                    "sample_quality_good": True,
+                }
+            )
+
+        report = build_confidence_control_report(
+            samples,
+            horizon_minutes=15,
+            min_bin_count=1,
+            min_symbol_labels=1,
+            min_threshold_labels=1,
+            included_confidence_sources=("model",),
+            readiness_min_populated_bins=3,
+            readiness_min_bin_labels=2,
+        )
+
+        readiness = report["calibration_readiness"]
+        calibration = report["symbol_controls"]["SPY"]["calibration"]
+        self.assertTrue(readiness["ready"])
+        self.assertEqual(readiness["populated_bin_count"], 3)
+        self.assertEqual(sorted(readiness["populated_bins"].keys()), ["0.5-0.6", "0.6-0.7", "0.7-0.8"])
+        self.assertNotIn("0.9-1.0", calibration)
+
 
 if __name__ == "__main__":
     unittest.main()

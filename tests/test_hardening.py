@@ -83,6 +83,72 @@ class TestHardening(unittest.TestCase):
         self.assertEqual(out.action, "hold")
         self.assertIn("Direction policy (SPY): SHORT blocked", out.reasoning)
 
+    def test_confidence_signal_not_ready_disables_band_escalation_and_neutralizes_ev(self) -> None:
+        settings = _service_settings(
+            confidence_calibration_mode="auto",
+            llm_two_tier_escalate_on_trade=False,
+            llm_two_tier_require_confidence_band=True,
+        )
+        engine = TradingEngine(settings)
+        engine.llm_secondary = object()
+        engine.set_confidence_controls(
+            {
+                "enabled": False,
+                "confidence_signal_ready": False,
+                "confidence_signal_mode": "auto",
+            }
+        )
+        decision = AiDecision(
+            action="trade",
+            direction="LONG",
+            confidence=0.90,
+            size=1,
+            sl_ticks=8,
+            tp_ticks=12,
+            reasoning="test",
+        )
+
+        should_escalate, reason = engine._should_escalate_to_secondary(decision)
+
+        self.assertFalse(should_escalate)
+        self.assertEqual(reason, "confidence_signal_not_ready:auto")
+        self.assertAlmostEqual(engine._ev_ticks(decision), 2.0)
+
+    def test_persistence_saves_confidence_provenance_in_sample_payload(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            db_path = tmp / "app.db"
+            persistence = Persistence(str(db_path))
+            cycle = CycleResult(
+                timestamp=datetime(2026, 5, 11, 19, 0, tzinfo=timezone.utc),
+                dashboard="d",
+                llm_raw="",
+                note="n",
+                decision=AiDecision(
+                    action="hold",
+                    direction=None,
+                    confidence=0.0,
+                    size=1,
+                    sl_ticks=0,
+                    tp_ticks=0,
+                    reasoning="x",
+                    forecast_direction="LONG",
+                    forecast_confidence=0.5,
+                    forecast_horizon_minutes=15,
+                    confidence_source="fallback",
+                    forecast_confidence_source="normalized",
+                ),
+            )
+
+            persistence.save_data_sample(cycle, metadata={"symbol": "SPY"})
+            rows = persistence.list_data_samples(10)
+
+            self.assertEqual(rows[0]["confidence_source"], "fallback")
+            self.assertEqual(rows[0]["forecast_confidence_source"], "normalized")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_trading_kill_switch_blocks_start_and_run_once(self) -> None:
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)

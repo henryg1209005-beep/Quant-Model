@@ -116,7 +116,7 @@ def _parse_key_value_block(text: str) -> dict | None:
         key, value = line.split(":", 1)
         key = key.strip().strip('"').strip("'").lower()
         value = value.strip().strip('"').strip("'")
-        if key in {"action", "direction", "reasoning", "forecast_direction"}:
+        if key in {"action", "direction", "reasoning", "forecast_direction", "confidence_source", "forecast_confidence_source"}:
             out[key] = value
             seen = True
         elif key in {"confidence", "forecast_confidence"}:
@@ -139,6 +139,7 @@ def parse_decision(text: str) -> AiDecision:
     sl_ticks = _to_int(payload.get("sl_ticks", 0), 0)
     tp_ticks = _to_int(payload.get("tp_ticks", 0), 0)
     reasoning = str(payload.get("reasoning", ""))
+    confidence_source = str(payload.get("confidence_source", "model") or "model").strip().lower()
     raw_forecast_direction = payload.get("forecast_direction")
     forecast_direction = (
         str(raw_forecast_direction).strip().upper()
@@ -147,6 +148,9 @@ def parse_decision(text: str) -> AiDecision:
     )
     forecast_confidence = _to_float(payload.get("forecast_confidence", confidence), confidence)
     forecast_horizon_minutes = _to_int(payload.get("forecast_horizon_minutes", 15), 15)
+    forecast_confidence_source = str(
+        payload.get("forecast_confidence_source", confidence_source) or confidence_source or "model"
+    ).strip().lower()
 
     if action not in {"trade", "hold"}:
         action = "hold"
@@ -168,6 +172,8 @@ def parse_decision(text: str) -> AiDecision:
         forecast_direction=forecast_direction,
         forecast_confidence=forecast_confidence,
         forecast_horizon_minutes=forecast_horizon_minutes,
+        confidence_source=confidence_source or "model",
+        forecast_confidence_source=forecast_confidence_source or confidence_source or "model",
     )
 
 

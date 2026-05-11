@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timezone
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from ai_trading_engine.models import AccountState, AiDecision, Position, Quote
@@ -25,6 +25,23 @@ class AlpacaPaperExecutionEngine:
         self._base = trading_url.rstrip("/")
         self._tick_size = max(1e-6, float(tick_size))
 
+    @staticmethod
+    def _raise_http_error(exc: HTTPError, path: str) -> None:
+        detail = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+            parsed = json.loads(body) if body else {}
+            if isinstance(parsed, dict):
+                detail = str(parsed.get("message") or parsed.get("error") or "")
+            if not detail:
+                detail = body[:240]
+        except Exception:
+            detail = ""
+        msg = f"Alpaca trading request failed ({exc.code}) on {path}"
+        if detail:
+            msg = f"{msg}: {detail}"
+        raise RuntimeError(msg) from exc
+
     def _post(self, path: str, payload: dict) -> dict:
         req = Request(
             f"{self._base}{path}",
@@ -34,25 +51,44 @@ class AlpacaPaperExecutionEngine:
         req.add_header("Content-Type", "application/json")
         req.add_header("APCA-API-KEY-ID", self._key)
         req.add_header("APCA-API-SECRET-KEY", self._secret)
-        with urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            with urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            self._raise_http_error(exc, path)
+        except URLError as exc:
+            raise RuntimeError(f"Alpaca trading network failure on {path}: {exc.reason}") from exc
 
-    def _get(self, path: str) -> dict:
+    def _get(self, path: str, *, allow_404: bool = False) -> dict:
         req = Request(f"{self._base}{path}", method="GET")
         req.add_header("accept", "application/json")
         req.add_header("APCA-API-KEY-ID", self._key)
         req.add_header("APCA-API-SECRET-KEY", self._secret)
-        with urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            with urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            if allow_404 and exc.code == 404:
+                return {}
+            self._raise_http_error(exc, path)
+        except URLError as exc:
+            raise RuntimeError(f"Alpaca trading network failure on {path}: {exc.reason}") from exc
 
-    def _delete(self, path: str) -> dict:
+    def _delete(self, path: str, *, allow_404: bool = False) -> dict:
         req = Request(f"{self._base}{path}", method="DELETE")
         req.add_header("accept", "application/json")
         req.add_header("APCA-API-KEY-ID", self._key)
         req.add_header("APCA-API-SECRET-KEY", self._secret)
-        with urlopen(req, timeout=20) as resp:
-            body = resp.read().decode("utf-8").strip()
-            return json.loads(body) if body else {}
+        try:
+            with urlopen(req, timeout=20) as resp:
+                body = resp.read().decode("utf-8").strip()
+                return json.loads(body) if body else {}
+        except HTTPError as exc:
+            if allow_404 and exc.code == 404:
+                return {}
+            self._raise_http_error(exc, path)
+        except URLError as exc:
+            raise RuntimeError(f"Alpaca trading network failure on {path}: {exc.reason}") from exc
 
     def fetch_account_summary(self) -> dict:
         payload = self._get("/v2/account")
@@ -69,12 +105,9 @@ class AlpacaPaperExecutionEngine:
         }
 
     def fetch_symbol_position(self, symbol: str) -> Position | None:
-        try:
-            payload = self._get(f"/v2/positions/{symbol}")
-        except HTTPError as exc:
-            if exc.code == 404:
-                return None
-            raise
+        payload = self._get(f"/v2/positions/{symbol}", allow_404=True)
+        if not payload:
+            return None
 
         side = str(payload.get("side", "")).lower()
         if side == "long":
@@ -134,13 +167,10 @@ class AlpacaPaperExecutionEngine:
         return None
 
     def close_symbol_position(self, symbol: str) -> dict:
-        try:
-            payload = self._delete(f"/v2/positions/{symbol}")
-            return {"closed": True, "symbol": symbol, "broker_response": payload}
-        except HTTPError as exc:
-            if exc.code == 404:
-                return {"closed": False, "symbol": symbol, "reason": "no_open_position"}
-            raise
+        payload = self._delete(f"/v2/positions/{symbol}", allow_404=True)
+        if not payload:
+            return {"closed": False, "symbol": symbol, "reason": "no_open_position"}
+        return {"closed": True, "symbol": symbol, "broker_response": payload}
 
     def list_open_orders(self, symbol: str) -> list[dict]:
         payload = self._get("/v2/orders?status=open&nested=true&limit=200")

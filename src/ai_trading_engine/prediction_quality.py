@@ -30,7 +30,12 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _raw_prediction(sample: dict[str, Any]) -> tuple[str, str | None, float, str]:
+def _normalize_confidence_source(value: Any, default: str = "model") -> str:
+    raw = str(value or "").strip().lower()
+    return raw or str(default or "model").strip().lower() or "model"
+
+
+def _raw_prediction(sample: dict[str, Any]) -> tuple[str, str | None, float, str, str]:
     raw = str(sample.get("llm_raw") or "")
     if raw:
         try:
@@ -41,8 +46,18 @@ def _raw_prediction(sample: dict[str, Any]) -> tuple[str, str | None, float, str
                     decision.forecast_direction,
                     _clip(float(decision.forecast_confidence), 0.0, 1.0),
                     "forecast",
+                    _normalize_confidence_source(
+                        decision.forecast_confidence_source,
+                        default=decision.confidence_source or "model",
+                    ),
                 )
-            return decision.action, decision.direction, _clip(float(decision.confidence), 0.0, 1.0), "trade"
+            return (
+                decision.action,
+                decision.direction,
+                _clip(float(decision.confidence), 0.0, 1.0),
+                "trade",
+                _normalize_confidence_source(decision.confidence_source, default="model"),
+            )
         except Exception:
             pass
     forecast_direction = str(sample.get("forecast_direction")).strip().upper() if sample.get("forecast_direction") else None
@@ -52,12 +67,17 @@ def _raw_prediction(sample: dict[str, Any]) -> tuple[str, str | None, float, str
             forecast_direction,
             _clip(_float(sample.get("forecast_confidence")), 0.0, 1.0),
             "forecast",
+            _normalize_confidence_source(
+                sample.get("forecast_confidence_source"),
+                default=sample.get("confidence_source") or "model",
+            ),
         )
     return (
         str(sample.get("action") or "hold").strip().lower(),
         str(sample.get("direction")).strip().upper() if sample.get("direction") else None,
         _clip(_float(sample.get("confidence")), 0.0, 1.0),
         "trade",
+        _normalize_confidence_source(sample.get("confidence_source"), default="model"),
     )
 
 
@@ -268,6 +288,7 @@ def build_prediction_labels(
     quality_mode: str = "all",
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
+    included_confidence_sources: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     filtered_samples = _filter_samples_by_quality(samples, quality_mode)
     by_symbol = _points_by_symbol(filtered_samples)
@@ -275,6 +296,11 @@ def build_prediction_labels(
     eligible = 0
     skipped_no_quote = 0
     skipped_no_prediction = 0
+    allowed_sources = (
+        {_normalize_confidence_source(v) for v in included_confidence_sources}
+        if included_confidence_sources
+        else None
+    )
 
     for symbol, points in by_symbol.items():
         timestamps = [p.timestamp for p in points]
@@ -288,11 +314,13 @@ def build_prediction_labels(
                 sb = str(sample.get("session_bucket") or "").strip().lower()
                 if sb not in {str(x).strip().lower() for x in allowed_session_buckets}:
                     continue
-            action, direction, confidence, prediction_source = _raw_prediction(point.sample)
+            action, direction, confidence, prediction_source, confidence_source = _raw_prediction(point.sample)
             if direction not in {"LONG", "SHORT"}:
                 skipped_no_prediction += 1
                 continue
             if confidence < min_confidence:
+                continue
+            if allowed_sources is not None and _normalize_confidence_source(confidence_source) not in allowed_sources:
                 continue
             eligible += 1
             side = 1.0 if direction == "LONG" else -1.0
@@ -304,6 +332,8 @@ def build_prediction_labels(
                 future = points[idx]
                 forward_bps = ((future.price / point.price) - 1.0) * 10000.0
                 signed_bps = forward_bps * side
+                feature_patterns = dict(sample.get("feature_patterns") or {})
+                feature_structure = dict(sample.get("feature_structure") or {})
                 labels_by_horizon[int(horizon)].append(
                     {
                         "timestamp": point.timestamp.isoformat(),
@@ -320,8 +350,21 @@ def build_prediction_labels(
                         "finnhub_news_sentiment_label": sample.get("finnhub_news_sentiment_label"),
                         "finnhub_news_sentiment_score": _float(sample.get("finnhub_news_sentiment_score")),
                         "indicator_regime": sample.get("indicator_regime") or "unknown",
+                        "feature_volatility_label": sample.get("feature_volatility_label") or "",
+                        "feature_volume_label": sample.get("feature_volume_label") or "",
+                        "feature_sr_label": sample.get("feature_sr_label") or "",
+                        "feature_pattern_bias": sample.get("feature_pattern_bias") or "",
+                        "feature_pattern_score": _float(sample.get("feature_pattern_score")),
+                        "feature_pattern_summary": sample.get("feature_pattern_summary") or "",
+                        "feature_patterns": feature_patterns,
+                        "feature_structure_bias": sample.get("feature_structure_bias") or "",
+                        "feature_structure_score": _float(sample.get("feature_structure_score")),
+                        "feature_structure_summary": sample.get("feature_structure_summary") or "",
+                        "feature_structure": feature_structure,
+                        "session_segment": feature_structure.get("session_segment") or "unknown",
                         "action": action,
                         "prediction_source": prediction_source,
+                        "confidence_source": _normalize_confidence_source(confidence_source),
                         "direction": direction,
                         "confidence": confidence,
                         "confidence_bin": _confidence_bin(confidence),
@@ -357,6 +400,7 @@ def build_prediction_quality_report(
     quality_mode: str = "all",
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
+    included_confidence_sources: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -365,6 +409,7 @@ def build_prediction_quality_report(
         quality_mode=quality_mode,
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
+        included_confidence_sources=included_confidence_sources,
     )
     labels_by_horizon = label_report["labels_by_horizon"]
     horizons: dict[str, Any] = {}
@@ -383,6 +428,8 @@ def build_prediction_quality_report(
             "by_finnhub_earnings_risk": _group_metrics(labels, "finnhub_earnings_risk"),
             "by_finnhub_news_sentiment_label": _group_metrics(labels, "finnhub_news_sentiment_label"),
             "by_indicator_regime": _group_metrics(labels, "indicator_regime"),
+            "by_session_segment": _group_metrics(labels, "session_segment"),
+            "by_structure_bias": _group_metrics(labels, "feature_structure_bias"),
         }
 
     return {
@@ -396,6 +443,7 @@ def build_prediction_quality_report(
         "skipped_no_quote": label_report["skipped_no_quote"],
         "skipped_no_prediction": label_report["skipped_no_prediction"],
         "min_confidence": label_report["min_confidence"],
+        "included_confidence_sources": list(included_confidence_sources or []),
         "horizons": horizons,
     }
 
@@ -494,6 +542,9 @@ def build_confidence_control_report(
     policy_stress_bps: float = 0.0,
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
+    included_confidence_sources: tuple[str, ...] = ("model", "cached"),
+    readiness_min_populated_bins: int = 3,
+    readiness_min_bin_labels: int = 30,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -502,8 +553,23 @@ def build_confidence_control_report(
         quality_mode=quality_mode,
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
+        included_confidence_sources=included_confidence_sources,
     )
     rows = label_report["labels_by_horizon"].get(max(1, int(horizon_minutes)), [])
+    confidence_bin_metrics = _group_metrics(rows, "confidence_bin")
+    populated_bins = {
+        str(bin_label): int(metric.get("count", 0) or 0)
+        for bin_label, metric in confidence_bin_metrics.items()
+        if int(metric.get("count", 0) or 0) >= max(1, int(readiness_min_bin_labels))
+    }
+    readiness = {
+        "ready": bool(len(populated_bins) >= max(1, int(readiness_min_populated_bins))),
+        "populated_bin_count": len(populated_bins),
+        "required_populated_bins": max(1, int(readiness_min_populated_bins)),
+        "min_labels_per_bin": max(1, int(readiness_min_bin_labels)),
+        "populated_bins": populated_bins,
+        "included_confidence_sources": [_normalize_confidence_source(v) for v in included_confidence_sources],
+    }
     if not rows:
         return {
             "ok": True,
@@ -512,6 +578,7 @@ def build_confidence_control_report(
             "overall_label_count": 0,
             "default_min_confidence": float(default_min_confidence),
             "global_threshold": float(default_min_confidence),
+            "calibration_readiness": readiness,
             "symbol_controls": {},
             "policy": {
                 "min_accuracy": float(policy_min_accuracy),
@@ -624,6 +691,7 @@ def build_confidence_control_report(
         "default_min_confidence": float(default_min_confidence),
         "global_threshold": float(global_threshold),
         "global_threshold_metrics": global_summary,
+        "calibration_readiness": readiness,
         "symbol_controls": symbol_controls,
         "policy": {
             "min_accuracy": max(0.0, min(1.0, float(policy_min_accuracy))),

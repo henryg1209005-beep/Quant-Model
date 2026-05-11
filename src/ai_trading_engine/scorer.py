@@ -1,7 +1,9 @@
 ﻿from __future__ import annotations
 
 from ai_trading_engine.indicators import nearest_level_distance_atr
+from ai_trading_engine.market_structure import detect_market_structure
 from ai_trading_engine.models import ContextDimension, IndicatorSet, MarketContext
+from ai_trading_engine.patterns import detect_price_action_patterns
 from ai_trading_engine.volume_profile import volume_ratio_and_label
 
 
@@ -107,7 +109,15 @@ def build_market_context(
         ),
     ]
 
-    return MarketContext(dimensions=dims, key_levels=levels, gex_overlay=gex_overlay)
+    pattern_features = detect_price_action_patterns(primary_bars, indicators)
+    structure_features = detect_market_structure(primary_bars, indicators)
+    return MarketContext(
+        dimensions=dims,
+        key_levels=levels,
+        gex_overlay=gex_overlay,
+        pattern_features=pattern_features,
+        structure_features=structure_features,
+    )
 
 
 def render_context_dashboard(context: MarketContext) -> str:
@@ -129,5 +139,19 @@ def render_context_dashboard(context: MarketContext) -> str:
                 lines.append(f"   - {k}: {v:.2f}")
             else:
                 lines.append(f"   - {k}: {v}")
+
+    if context.pattern_features:
+        patterns = dict(context.pattern_features.get("patterns") or {})
+        lines.append("PRICE ACTION PATTERNS")
+        lines.append(f"   - Summary: {context.pattern_features.get('summary', 'none')}")
+        for key in ("vwap_state", "trend_pullback", "recent_range_break", "failed_break", "range_compression"):
+            lines.append(f"   - {key}: {patterns.get(key, 'unknown')}")
+
+    if context.structure_features:
+        structure = dict(context.structure_features.get("structure") or {})
+        lines.append("MARKET STRUCTURE")
+        lines.append(f"   - Summary: {context.structure_features.get('summary', 'none')}")
+        for key in ("session_segment", "swing_structure", "breakout_state", "close_location", "impulse_state"):
+            lines.append(f"   - {key}: {structure.get(key, 'unknown')}")
 
     return "\n".join(lines)

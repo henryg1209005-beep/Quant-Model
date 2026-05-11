@@ -1402,6 +1402,8 @@ class TradingAppService:
                 "global_min_confidence": float(self._settings.confidence_control_default_min_confidence),
                 "symbol_min_confidence": {},
                 "symbol_calibration": {},
+                "confidence_signal_ready": False,
+                "confidence_signal_mode": str(self._settings.confidence_calibration_mode or "auto").strip().lower(),
                 "calibration_gate_enabled": bool(self._settings.calibration_gate_enabled),
                 "calibration_gate_stress_bps": float(self._settings.calibration_gate_stress_bps),
                 "symbol_allowed_confidence_bins": {},
@@ -1438,10 +1440,17 @@ class TradingAppService:
             default_min_confidence=max(0.0, min(1.0, float(self._settings.confidence_control_default_min_confidence))),
             policy_min_accuracy=max(0.0, min(1.0, float(self._settings.symbol_gate_min_accuracy))),
             policy_stress_bps=max(0.0, float(self._settings.calibration_gate_stress_bps)),
+            included_confidence_sources=tuple(self._settings.confidence_calibration_allowed_sources or ("model", "cached")),
+            readiness_min_populated_bins=max(1, int(self._settings.confidence_calibration_min_populated_bins)),
+            readiness_min_bin_labels=max(1, int(self._settings.confidence_calibration_min_labels_per_bin)),
             **self._research_label_filters(),
         )
         symbol_controls = dict(report.get("symbol_controls") or {})
         policy = dict(report.get("policy") or {})
+        readiness = dict(report.get("calibration_readiness") or {})
+        confidence_ready = bool(readiness.get("ready", False))
+        confidence_mode = str(self._settings.confidence_calibration_mode or "auto").strip().lower()
+        controls_enabled = confidence_mode == "force" or (confidence_mode == "auto" and confidence_ready)
         stress_bps = float(self._settings.calibration_gate_stress_bps)
         symbol_allowed_confidence_bins: dict[str, list[str]] = {}
         symbol_bin_stressed_bps: dict[str, dict[str, float]] = {}
@@ -1474,7 +1483,7 @@ class TradingAppService:
             symbol_direction_policy[sym_u] = normalized
             symbol_blocked_directions[sym_u] = sorted(set(blocked))
         controls = {
-            "enabled": True,
+            "enabled": bool(controls_enabled),
             "default_min_confidence": float(report.get("default_min_confidence", 0.55)),
             "global_min_confidence": float(report.get("global_threshold", report.get("default_min_confidence", 0.55))),
             "symbol_min_confidence": {
@@ -1488,6 +1497,8 @@ class TradingAppService:
                 }
                 for sym, cfg in symbol_controls.items()
             },
+            "confidence_signal_ready": bool(confidence_ready),
+            "confidence_signal_mode": confidence_mode,
             "calibration_gate_enabled": bool(self._settings.calibration_gate_enabled),
             "calibration_gate_stress_bps": stress_bps,
             "symbol_allowed_confidence_bins": symbol_allowed_confidence_bins,
@@ -1499,7 +1510,7 @@ class TradingAppService:
         self._confidence_control_state.update(
             {
                 "evaluated_at": now.isoformat(),
-                "enabled": True,
+                "enabled": bool(controls_enabled),
                 "controls": controls,
                 "report": report,
             }
@@ -3178,6 +3189,7 @@ class TradingAppService:
             decision.forecast_direction = fallback_direction
             if float(decision.forecast_confidence or 0.0) <= 0.0:
                 decision.forecast_confidence = max(0.5, float(decision.confidence or 0.0))
+                decision.forecast_confidence_source = "normalized"
             if int(decision.forecast_horizon_minutes or 0) <= 0:
                 decision.forecast_horizon_minutes = 15
 
