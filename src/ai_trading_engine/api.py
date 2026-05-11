@@ -1806,6 +1806,7 @@ def home() -> str:
 
     async function refreshAll() {
       try {
+        const fastFirstLoad = !window.__apexHydrated;
         const analyticsActive = analyticsTabActive();
         const activeAnalyticsSubtab = currentAnalyticsSubtab();
         const needWideHistory = analyticsActive && activeAnalyticsSubtab === "charts";
