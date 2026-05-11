@@ -134,6 +134,40 @@ class TestHardening(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_automation_status_skips_policy_performance_by_default(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+
+            with patch.object(service, "policy_tier_performance_report", side_effect=AssertionError("should not run")):
+                status = service.automation_status()
+
+            self.assertIn("policy_tier", status)
+            self.assertNotIn("performance_15m", status["policy_tier"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_automation_status_can_include_policy_performance(self) -> None:
+        tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            settings = _service_settings(app_db_path=str(tmp / "app.db"))
+            service = TradingAppService(settings, Persistence(settings.app_db_path))
+
+            with patch.object(
+                service,
+                "policy_tier_performance_report",
+                return_value={"ok": True, "rows": []},
+            ) as mocked:
+                status = service.automation_status(include_policy_performance=True)
+
+            mocked.assert_called_once_with(lookback=100000, horizon_minutes=15)
+            self.assertEqual(status["policy_tier"]["performance_15m"], {"ok": True, "rows": []})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_weekend_block_prevents_start_and_cycle(self) -> None:
         tmp = Path("tests") / f"_tmp_{uuid.uuid4().hex}"
         tmp.mkdir(parents=True, exist_ok=True)

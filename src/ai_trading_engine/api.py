@@ -1684,6 +1684,9 @@ def home() -> str:
 
     async function refreshAll() {
       try {
+        const analyticsActive = analyticsTabActive();
+        const activeAnalyticsSubtab = currentAnalyticsSubtab();
+        const needWideHistory = analyticsActive && activeAnalyticsSubtab === "charts";
         const [
           status,
           account,
@@ -1720,8 +1723,8 @@ def home() -> str:
           fetchJson("/api/metrics"),
           fetchJson("/api/decisions?limit=15"),
           fetchJson("/api/trades?limit=15"),
-          fetchJson("/api/decisions?limit=80"),
-          fetchJson("/api/trades?limit=80"),
+          needWideHistory ? fetchJson("/api/decisions?limit=80") : Promise.resolve({ items: [] }),
+          needWideHistory ? fetchJson("/api/trades?limit=80") : Promise.resolve({ items: [] }),
           fetchJson("/api/go-live-gate"),
           fetchJson("/api/audit?limit=20"),
           fetchJson("/api/notifications?limit=20"),
@@ -1811,11 +1814,15 @@ def home() -> str:
         const samplesPerHour = sampleCountWin * (60.0 / windowMins);
         const nowMs = Date.now();
         const oneHourAgo = nowMs - (60 * 60 * 1000);
-        const decisionsLastHour = (decisionsWide || []).filter((d) => {
-          const ts = Date.parse(String(d.timestamp || d.ts || ""));
-          return Number.isFinite(ts) && ts >= oneHourAgo;
-        }).length;
-        document.getElementById("kDataPace").textContent = `${n(samplesPerHour, 1)} samp/h | ${n(decisionsLastHour, 0)} dec/h`;
+        const decisionsLastHour = needWideHistory
+          ? (decisionsWide || []).filter((d) => {
+              const ts = Date.parse(String(d.timestamp || d.ts || ""));
+              return Number.isFinite(ts) && ts >= oneHourAgo;
+            }).length
+          : null;
+        document.getElementById("kDataPace").textContent = decisionsLastHour === null
+          ? `${n(samplesPerHour, 1)} samp/h`
+          : `${n(samplesPerHour, 1)} samp/h | ${n(decisionsLastHour, 0)} dec/h`;
         document.getElementById("kProjSamples").textContent = `${n(samplesPerHour * 24.0, 0)} / day`;
         document.getElementById("kTopCause").textContent = topCause.cause && topCause.cause !== "none"
           ? `${String(topCause.cause)} (${n(topCause.count,0)})`

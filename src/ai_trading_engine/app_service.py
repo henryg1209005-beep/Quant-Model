@@ -5440,11 +5440,18 @@ class TradingAppService:
             "rows": tier_rows,
         }
 
-    def automation_status(self) -> dict[str, Any]:
+    def automation_status(self, *, include_policy_performance: bool = False) -> dict[str, Any]:
         state = self._load_automation_state()
         self._repair_daily_research_summary_if_inconsistent(state)
         state = self._load_automation_state()
         quarantine = self._update_symbol_quarantines(force=True)
+        policy_tier: dict[str, Any] = {
+            "enabled": bool(self._settings.robust_policy_tiering_enabled),
+            "active": str(state.get("policy_tier_active") or "balanced"),
+            "last_changed_at": state.get("policy_tier_last_changed_at"),
+        }
+        if include_policy_performance:
+            policy_tier["performance_15m"] = self.policy_tier_performance_report(lookback=100000, horizon_minutes=15)
         return {
             "enabled": bool(self._settings.auto_retrain_enabled),
             "check_seconds": int(self._settings.auto_retrain_check_seconds),
@@ -5470,12 +5477,7 @@ class TradingAppService:
                 "last_reason": state.get("auto_recovery_last_reason"),
             },
             "autonomy": self.autonomous_research_status(),
-            "policy_tier": {
-                "enabled": bool(self._settings.robust_policy_tiering_enabled),
-                "active": str(state.get("policy_tier_active") or "balanced"),
-                "last_changed_at": state.get("policy_tier_last_changed_at"),
-                "performance_15m": self.policy_tier_performance_report(lookback=100000, horizon_minutes=15),
-            },
+            "policy_tier": policy_tier,
             "symbol_quarantine": quarantine,
             "weekly_experiments": {
                 "enabled": bool(self._settings.weekly_experiments_enabled),
