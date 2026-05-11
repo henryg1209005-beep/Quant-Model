@@ -101,6 +101,20 @@ Compose services:
 - `api` (FastAPI dashboard/API)
 - `worker` (continuous trading cycles)
 
+## Railway split services
+
+- The container entrypoint supports `APP_ROLE=api` or `APP_ROLE=worker`.
+- For the web service (`apex-01`):
+  - keep the health check on `/health`
+  - set `APP_ROLE=api`
+  - set `AUTO_START_WORKER=false` so the API process does not launch its own in-process worker
+- For the worker service:
+  - create a second Railway service from the same repo/image
+  - set `APP_ROLE=worker`
+  - do not configure an HTTP health check or public domain
+  - point it at the same `/data` volume and the same runtime env as the web service
+- This lets Railway run a dedicated worker process with the same codebase and environment, while keeping the web service focused on the API only.
+
 ## Providers
 
 - Default safe mode:
