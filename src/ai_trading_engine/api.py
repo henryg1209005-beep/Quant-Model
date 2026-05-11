@@ -649,10 +649,6 @@ def home() -> str:
               </div>
             </div>
           </div>
-          <div class="chart-card" style="grid-column: 1 / -1">
-            <div class="chart-title">Trade Outcome Space &mdash; Sequence &times; Size &times; PnL &nbsp;<span style="font-weight:400;font-size:10px;color:#9ca3af">(drag to rotate &bull; scroll to zoom &bull; hover for details)</span></div>
-            <div id="tradeScatter3d"></div>
-          </div>
         </div>
 
         <div id="analyticsQualityPanel" class="analytics-panel span-2">
@@ -835,7 +831,6 @@ def home() -> str:
     </div>
   </div>
 
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <script>
     function pad2(v) {
       return String(v).padStart(2, "0");
@@ -1215,90 +1210,6 @@ def home() -> str:
       const el = document.getElementById("decMix");
       if (el) el.innerHTML = svg;
     }
-    function renderTradeScatter3D(trades) {
-      const el = document.getElementById("tradeScatter3d");
-      if (!el) return;
-      if (typeof Plotly === "undefined") {
-        el.innerHTML = '<div class="chart-empty" style="height:340px;display:flex;align-items:center;justify-content:center">3D chart requires a network connection to load Plotly</div>';
-        return;
-      }
-      const items = (trades || []).filter((t) => t.entry_price != null && t.pnl != null);
-      if (items.length < 3) {
-        if (el._plotlyInited) { Plotly.purge(el); el._plotlyInited = false; }
-        el.innerHTML = '<div class="chart-empty" style="height:340px;display:flex;align-items:center;justify-content:center">Need at least 3 closed trades to render</div>';
-        return;
-      }
-      if (el.querySelector(".chart-empty")) el.innerHTML = "";
-      const longs  = items.filter((t) => String(t.direction || "").toUpperCase() === "LONG");
-      const shorts = items.filter((t) => String(t.direction || "").toUpperCase() === "SHORT");
-      const mkTrace = (subset, name, color) => ({
-        type: "scatter3d",
-        mode: "markers",
-        name,
-        x: subset.map((_, i) => i + 1),
-        y: subset.map((t) => Number(t.size || 0)),
-        z: subset.map((t) => Number(t.pnl || 0)),
-        text: subset.map((t) => [
-          `<b>${t.symbol || "—"} ${t.direction || ""}</b>`,
-          fmtTs(t.timestamp),
-          `Entry ${n(t.entry_price)} → Exit ${n(t.exit_price)}`,
-          `PnL: ${n(t.pnl)}  |  Size: ${n(t.size, 0)}`,
-        ].join("<br>")),
-        hovertemplate: "%{text}<extra></extra>",
-        marker: {
-          size: subset.map((t) => Math.max(4, Math.min(13, 4 + Math.abs(Number(t.pnl || 0)) * 0.5))),
-          color,
-          opacity: 0.82,
-          line: { width: 0.5, color: "rgba(255,255,255,0.4)" },
-        },
-      });
-      const traces = [];
-      if (longs.length)  traces.push(mkTrace(longs,  "LONG",  "#16a34a"));
-      if (shorts.length) traces.push(mkTrace(shorts, "SHORT", "#dc2626"));
-      const axStyle = (title) => ({
-        title: { text: title, font: { size: 10, color: "#6b7280" } },
-        gridcolor: "#e1e4ea",
-        gridwidth: 1,
-        zerolinecolor: "#94a3b8",
-        zerolinewidth: 1,
-        tickfont: { size: 9, color: "#9ca3af" },
-        showbackground: true,
-        backgroundcolor: "#f9fafb",
-      });
-      const layout = {
-        height: 360,
-        margin: { l: 0, r: 0, t: 4, b: 0 },
-        paper_bgcolor: "#f9fafb",
-        scene: {
-          xaxis: axStyle("Trade #"),
-          yaxis: axStyle("Size"),
-          zaxis: { ...axStyle("PnL"), zerolinewidth: 2, zerolinecolor: "#6b7280" },
-          camera: { eye: { x: 1.55, y: 1.2, z: 0.85 } },
-          dragmode: "turntable",
-          aspectmode: "auto",
-        },
-        legend: {
-          x: 0.01, y: 0.98,
-          font: { size: 11, color: "#374151", family: '"Inter","Segoe UI",system-ui,sans-serif' },
-          bgcolor: "rgba(255,255,255,0.82)", bordercolor: "#e1e4ea", borderwidth: 1,
-        },
-        font: { family: '"Inter","Segoe UI",system-ui,sans-serif', size: 10 },
-        hoverlabel: { bgcolor: "#0d1117", bordercolor: "#2d3a4a", font: { size: 11, color: "#f1f5f9", family: '"Inter","Segoe UI",system-ui,sans-serif' } },
-      };
-      const config = {
-        responsive: true,
-        displayModeBar: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: ["toImage", "sendDataToCloud", "select2d", "lasso2d"],
-      };
-      if (el._plotlyInited) {
-        Plotly.react(el, traces, layout, config);
-      } else {
-        Plotly.newPlot(el, traces, layout, config);
-        el._plotlyInited = true;
-      }
-    }
-
     function metricRows(obj) {
       return Object.entries(obj || {})
         .map(([name, m]) => ({ name, ...(m || {}) }))
@@ -2028,7 +1939,7 @@ def home() -> str:
         renderEquityChart(tradesWide);
         renderPnlHistogram(tradesWide);
         renderDecisionMix(decisionsWide);
-        if (needWideHistory) renderTradeScatter3D(tradesWide);
+
         if (qualityRes.prediction_quality) renderPredictionQuality(qualityRes, controlsRes);
         if (symbolPerfRes.symbol_performance) renderSymbolGate(symbolPerfRes);
         if (ccRes.champion_challenger_daily) renderChampionChallenger(ccRes, ccShortRes);

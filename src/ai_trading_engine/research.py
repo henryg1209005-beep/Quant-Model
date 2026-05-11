@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +12,29 @@ from ai_trading_engine.models import ClosedTrade
 
 def _clip(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
+
+
+def _wilson_ci(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score 95% CI for a proportion. Returns (low, high)."""
+    if n == 0:
+        return 0.0, 0.0
+    p = wins / float(n)
+    z2_n = (z * z) / float(n)
+    denom = 1.0 + z2_n
+    center = (p + z2_n / 2.0) / denom
+    margin = (z * math.sqrt((p * (1.0 - p) + z2_n / 4.0) / float(n))) / denom
+    return float(_clip(center - margin, 0.0, 1.0)), float(_clip(center + margin, 0.0, 1.0))
+
+
+def _binomial_p_value(wins: int, n: int) -> float:
+    """One-tailed p-value for H0: win_rate <= 0.5, normal approx with continuity correction."""
+    if n == 0:
+        return 1.0
+    sigma = math.sqrt(n * 0.25)
+    if sigma == 0.0:
+        return 1.0
+    z = (float(wins) - 0.5 - n * 0.5) / sigma
+    return float(0.5 * math.erfc(z / math.sqrt(2.0)))
 
 
 def _bin_label(confidence: float, bins: int) -> str:
@@ -64,19 +88,25 @@ def _metrics(samples: list[ResearchSample]) -> dict[str, float]:
             "avg_loss": 0.0,
             "expectancy": 0.0,
             "profit_factor": 0.0,
+            "win_rate_ci95_low": 0.0,
+            "win_rate_ci95_high": 0.0,
+            "win_rate_p_value": 1.0,
         }
 
     pnls = [s.pnl for s in samples]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p <= 0]
     count = len(samples)
-    win_rate = len(wins) / float(count)
+    win_count = len(wins)
+    win_rate = win_count / float(count)
     avg_win = (sum(wins) / len(wins)) if wins else 0.0
     avg_loss = (sum(losses) / len(losses)) if losses else 0.0
     expectancy = (win_rate * avg_win) + ((1.0 - win_rate) * avg_loss)
     gross_profit = sum(wins) if wins else 0.0
     gross_loss = abs(sum(losses)) if losses else 0.0
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0.0
+    ci_low, ci_high = _wilson_ci(win_count, count)
+    p_value = _binomial_p_value(win_count, count)
     return {
         "count": float(count),
         "net_pnl": float(sum(pnls)),
@@ -85,6 +115,9 @@ def _metrics(samples: list[ResearchSample]) -> dict[str, float]:
         "avg_loss": float(avg_loss),
         "expectancy": float(expectancy),
         "profit_factor": float(profit_factor),
+        "win_rate_ci95_low": ci_low,
+        "win_rate_ci95_high": ci_high,
+        "win_rate_p_value": p_value,
     }
 
 
@@ -153,7 +186,7 @@ def run_walk_forward(
     *,
     folds: int = 4,
     min_train: int = 40,
-    min_test: int = 20,
+    min_test: int = 60,
     bins: int = 10,
 ) -> dict[str, Any]:
     data = sorted(samples, key=lambda x: x.closed_at)
@@ -225,6 +258,15 @@ def run_walk_forward(
     total_selected_pnl = sum(float(f["test_selected_metrics"]["net_pnl"]) for f in fold_reports)
     total_test_pnl = sum(float(f["test_all_metrics"]["net_pnl"]) for f in fold_reports)
 
+    # Pooled win count across folds for aggregate CI.
+    total_sel_wins = int(round(sum(
+        float(f["test_selected_metrics"]["win_rate"]) * float(f["test_selected_metrics"]["count"])
+        for f in fold_reports
+    )))
+    total_sel_count = int(total_selected)
+    sel_ci_low, sel_ci_high = _wilson_ci(total_sel_wins, total_sel_count)
+    sel_p_value = _binomial_p_value(total_sel_wins, total_sel_count)
+
     return {
         "ok": True,
         "sample_count": n,
@@ -244,6 +286,9 @@ def run_walk_forward(
             "test_expectancy_weighted": weighted_avg("expectancy", "test_all_metrics"),
             "selected_win_rate_weighted": weighted_avg("win_rate", "test_selected_metrics"),
             "test_win_rate_weighted": weighted_avg("win_rate", "test_all_metrics"),
+            "selected_win_rate_ci95_low": sel_ci_low,
+            "selected_win_rate_ci95_high": sel_ci_high,
+            "selected_win_rate_p_value": sel_p_value,
         },
     }
 

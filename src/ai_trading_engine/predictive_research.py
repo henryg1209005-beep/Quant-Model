@@ -15,6 +15,29 @@ def _clip(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
+def _wilson_ci(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score 95% CI for a proportion. Returns (low, high)."""
+    if n == 0:
+        return 0.0, 0.0
+    p = wins / float(n)
+    z2_n = (z * z) / float(n)
+    denom = 1.0 + z2_n
+    center = (p + z2_n / 2.0) / denom
+    margin = (z * math.sqrt((p * (1.0 - p) + z2_n / 4.0) / float(n))) / denom
+    return float(_clip(center - margin, 0.0, 1.0)), float(_clip(center + margin, 0.0, 1.0))
+
+
+def _binomial_p_value(wins: int, n: int) -> float:
+    """One-tailed p-value for H0: win_rate <= 0.5, normal approx with continuity correction."""
+    if n == 0:
+        return 1.0
+    sigma = math.sqrt(n * 0.25)
+    if sigma == 0.0:
+        return 1.0
+    z = (float(wins) - 0.5 - n * 0.5) / sigma
+    return float(0.5 * math.erfc(z / math.sqrt(2.0)))
+
+
 def _sigmoid(x: float) -> float:
     if x >= 0:
         z = math.exp(-x)
@@ -245,15 +268,21 @@ def _fold_metrics(samples: list[PredictiveSample], probs: list[float], threshold
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p <= 0]
     count = len(selected)
-    win_rate = (len(wins) / float(count)) if count else 0.0
+    win_count = len(wins)
+    win_rate = (win_count / float(count)) if count else 0.0
     avg_win = (sum(wins) / len(wins)) if wins else 0.0
     avg_loss = (sum(losses) / len(losses)) if losses else 0.0
     expectancy = (win_rate * avg_win) + ((1.0 - win_rate) * avg_loss) if count else 0.0
+    ci_low, ci_high = _wilson_ci(win_count, count)
+    p_value = _binomial_p_value(win_count, count)
     return {
         "count": float(count),
         "net_pnl": float(sum(pnls)),
         "win_rate": float(win_rate),
         "expectancy": float(expectancy),
+        "win_rate_ci95_low": ci_low,
+        "win_rate_ci95_high": ci_high,
+        "win_rate_p_value": p_value,
     }
 
 
@@ -277,7 +306,7 @@ def run_predictive_walk_forward(
     *,
     folds: int = 4,
     min_train: int = 40,
-    min_test: int = 20,
+    min_test: int = 60,
     n_estimators: int = 80,
     learning_rate: float = 0.1,
     max_bins: int = 16,
@@ -383,12 +412,23 @@ def run_predictive_walk_forward(
     base_net = _sum_metric("baseline_test_selected_metrics", "net_pnl")
     model_count = _sum_metric("model_test_selected_metrics", "count")
     base_count = _sum_metric("baseline_test_selected_metrics", "count")
+
+    # Pooled CI across all model test folds.
+    model_total_wins = int(round(sum(
+        float(f["model_test_selected_metrics"]["win_rate"]) * float(f["model_test_selected_metrics"]["count"])
+        for f in fold_reports
+    )))
+    model_total_count = int(model_count)
+    model_win_ci_low, model_win_ci_high = _wilson_ci(model_total_wins, model_total_count)
+    model_win_p_value = _binomial_p_value(model_total_wins, model_total_count)
+
     promote = bool(
         len(fold_reports) > 0
         and model_net > base_net
         and _weighted_avg("model_test_selected_metrics", "expectancy")
         >= _weighted_avg("baseline_test_selected_metrics", "expectancy")
         and model_count >= max(1.0, 0.5 * base_count)
+        and model_win_ci_low > 0.50
     )
 
     return {
@@ -412,6 +452,9 @@ def run_predictive_walk_forward(
             "baseline_selected_expectancy_weighted": _weighted_avg("baseline_test_selected_metrics", "expectancy"),
             "model_selected_win_rate_weighted": _weighted_avg("model_test_selected_metrics", "win_rate"),
             "baseline_selected_win_rate_weighted": _weighted_avg("baseline_test_selected_metrics", "win_rate"),
+            "model_selected_win_rate_ci95_low": model_win_ci_low,
+            "model_selected_win_rate_ci95_high": model_win_ci_high,
+            "model_selected_win_rate_p_value": model_win_p_value,
             "promotion_recommendation": "promote" if promote else "hold_current",
         },
     }

@@ -14,6 +14,7 @@ class PromotionPolicy:
     min_expectancy: float = 0.0
     min_net_pnl_edge: float = 0.0
     require_recommendation_promote: bool = True
+    min_win_rate_ci95_lower: float = 0.50
 
 
 def evaluate_predictive_report(report: dict[str, Any], policy: PromotionPolicy) -> dict[str, Any]:
@@ -28,6 +29,9 @@ def evaluate_predictive_report(report: dict[str, Any], policy: PromotionPolicy) 
     base_net = float(agg.get("baseline_selected_net_pnl_total", 0.0))
     pnl_edge = model_net - base_net
     rec = str(agg.get("promotion_recommendation", ""))
+    win_ci_low = float(agg.get("model_selected_win_rate_ci95_low", 0.0))
+    win_ci_high = float(agg.get("model_selected_win_rate_ci95_high", 0.0))
+    win_p_value = float(agg.get("model_selected_win_rate_p_value", 1.0))
 
     checks = [
         {
@@ -72,6 +76,13 @@ def evaluate_predictive_report(report: dict[str, Any], policy: PromotionPolicy) 
             "comparator": "==",
             "passed": (rec == "promote") if policy.require_recommendation_promote else True,
         },
+        {
+            "name": "win_rate_ci95_lower_bound",
+            "actual": win_ci_low,
+            "expected": float(policy.min_win_rate_ci95_lower),
+            "comparator": ">=",
+            "passed": win_ci_low >= float(policy.min_win_rate_ci95_lower),
+        },
     ]
     passed = all(bool(c["passed"]) for c in checks)
     return {
@@ -85,6 +96,9 @@ def evaluate_predictive_report(report: dict[str, Any], policy: PromotionPolicy) 
             "baseline_selected_net_pnl_total": base_net,
             "model_net_pnl_edge_vs_baseline": pnl_edge,
             "promotion_recommendation": rec,
+            "model_selected_win_rate_ci95_low": win_ci_low,
+            "model_selected_win_rate_ci95_high": win_ci_high,
+            "model_selected_win_rate_p_value": win_p_value,
         },
     }
 
