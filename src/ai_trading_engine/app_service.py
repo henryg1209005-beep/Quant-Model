@@ -3677,7 +3677,8 @@ class TradingAppService:
             return cycle
 
         signed_bps_gate = self._evaluate_signed_bps_gate()
-        if bool(signed_bps_gate.get("blocked", False)):
+        _live_execution = self._settings.execution_provider == "alpaca"
+        if bool(signed_bps_gate.get("blocked", False)) and _live_execution:
             cycle = self._build_guard_cycle(
                 reason=f"Signed-bps kill switch active: {signed_bps_gate.get('reason')}.",
                 note="Guard hold: signed-bps kill switch",
