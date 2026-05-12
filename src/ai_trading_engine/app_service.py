@@ -4461,6 +4461,107 @@ class TradingAppService:
             save_reasoning_report(report)
         return report
 
+    def tier_comparison_report(
+        self,
+        *,
+        lookback: int = 5000,
+        horizon_minutes: int = 15,
+        quality_mode: str = "good_only",
+    ) -> dict[str, Any]:
+        rows = self._persistence.list_data_samples(max(1, min(50000, int(lookback))))
+        primary_rows: list[dict[str, Any]] = []
+        secondary_rows: list[dict[str, Any]] = []
+        cached_count = 0
+        reason_counts: dict[str, int] = {}
+
+        for r in rows:
+            lr = dict(dict(r.get("metadata") or {}).get("llm_routing") or {})
+            if bool(lr.get("state_gate_used_cache", False)):
+                cached_count += 1
+                continue
+            if bool(lr.get("secondary_invoked", False)):
+                secondary_rows.append(r)
+                reason = str(lr.get("secondary_reason") or "unknown").strip() or "unknown"
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            else:
+                primary_rows.append(r)
+
+        h = int(horizon_minutes)
+        filters = self._research_label_filters()
+
+        def _labels(sample_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return build_prediction_labels(
+                list(reversed(sample_rows)),
+                horizons_minutes=(h,),
+                min_confidence=0.0,
+                quality_mode=quality_mode,
+                **filters,
+            ).get("labels_by_horizon", {}).get(h, [])
+
+        def _agg(labels: list[dict[str, Any]]) -> dict[str, Any]:
+            n = len(labels)
+            if n == 0:
+                return {"labeled_count": 0, "accuracy": 0.0, "avg_signed_bps": 0.0, "avg_confidence": 0.0}
+            signed = [float(r.get("signed_return_bps", 0.0)) for r in labels]
+            wins = sum(1 for s in signed if s > 0)
+            return {
+                "labeled_count": n,
+                "accuracy": round(wins / float(n), 4),
+                "avg_signed_bps": round(sum(signed) / float(n), 4),
+                "avg_confidence": round(
+                    sum(float(r.get("confidence", 0.0)) for r in labels) / float(n), 4
+                ),
+            }
+
+        p_agg = _agg(_labels(primary_rows))
+        s_agg = _agg(_labels(secondary_rows))
+
+        p_cost = float(self._settings.automation_cost_est_primary_call_usd)
+        s_cost = float(self._settings.automation_cost_est_secondary_call_usd)
+        p_raw = len(primary_rows)
+        s_raw = len(secondary_rows)
+        total_raw = p_raw + s_raw
+        # Secondary calls that were escalations (not failover) cost both primary + secondary.
+        failover_count = sum(
+            1 for r in secondary_rows
+            if "failover" in str(
+                dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("secondary_reason", "")
+            ).lower()
+        )
+        normal_sec = s_raw - failover_count
+        p_est_cost = p_raw * p_cost
+        s_est_cost = (normal_sec * (p_cost + s_cost)) + (failover_count * s_cost)
+
+        p_correct = max(1, int(round(p_agg["accuracy"] * p_agg["labeled_count"])))
+        s_correct = max(1, int(round(s_agg["accuracy"] * s_agg["labeled_count"])))
+
+        return {
+            "ok": True,
+            "lookback": int(lookback),
+            "horizon_minutes": h,
+            "quality_mode": str(quality_mode),
+            "total_fresh_calls": total_raw,
+            "cached_decisions": cached_count,
+            "escalation_rate": round(s_raw / float(max(1, total_raw)), 4),
+            "primary": {
+                "raw_count": p_raw,
+                "est_cost_usd": round(p_est_cost, 6),
+                "cost_per_correct": round(p_est_cost / p_correct, 6),
+                **p_agg,
+            },
+            "secondary": {
+                "raw_count": s_raw,
+                "est_cost_usd": round(s_est_cost, 6),
+                "cost_per_correct": round(s_est_cost / s_correct, 6),
+                **s_agg,
+            },
+            "cost_config": {"primary_cost_usd": p_cost, "secondary_cost_usd": s_cost},
+            "secondary_reasons": [
+                {"reason": k, "count": v}
+                for k, v in sorted(reason_counts.items(), key=lambda x: -x[1])
+            ],
+        }
+
     def cell_leaderboard_bootstrap_report(
         self,
         *,

@@ -828,6 +828,19 @@ def home() -> str:
               <div class="card"><div class="kpi-label">Short Significance</div><div id="ccShortSig" class="kpi-val">-</div></div>
             </div>
             <div class="table-wrap"><table id="ccShortTable"></table></div>
+            <h3 style="margin-top:20px;border-bottom:0;padding-bottom:0">LLM Tier Comparison <span style="font-weight:400;font-size:11px;color:#9ca3af">primary-only vs secondary-escalated decisions</span></h3>
+            <div class="kpis" style="margin-top:10px">
+              <div class="card"><div class="kpi-label">Escalation Rate</div><div id="tcEscRate" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Primary Accuracy</div><div id="tcPrimAcc" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Secondary Accuracy</div><div id="tcSecAcc" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Primary Signed bps</div><div id="tcPrimBps" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Secondary Signed bps</div><div id="tcSecBps" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Accuracy Delta</div><div id="tcAccDelta" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">bps Delta</div><div id="tcBpsDelta" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Primary $/correct</div><div id="tcPrimCostCorr" class="kpi-val">-</div></div>
+              <div class="card"><div class="kpi-label">Secondary $/correct</div><div id="tcSecCostCorr" class="kpi-val">-</div></div>
+            </div>
+            <div class="table-wrap" style="margin-top:8px"><table id="tcReasonsTable"></table></div>
           </div>
         </div>
 
@@ -1701,6 +1714,34 @@ def home() -> str:
       `;
     }
 
+    function renderTierComparison(report) {
+      const tc = (report || {}).tier_comparison || {};
+      if (!tc.ok) return;
+      const p = tc.primary || {};
+      const s = tc.secondary || {};
+      const accDelta = (s.accuracy || 0) - (p.accuracy || 0);
+      const bpsDelta = (s.avg_signed_bps || 0) - (p.avg_signed_bps || 0);
+      const deltaColor = (v) => v > 0 ? "#16a34a" : v < 0 ? "#dc2626" : "#6b7280";
+      document.getElementById("tcEscRate").textContent = pct(tc.escalation_rate);
+      document.getElementById("tcPrimAcc").textContent = `${pct(p.accuracy)} (n=${n(p.labeled_count,0)})`;
+      document.getElementById("tcSecAcc").textContent = s.raw_count > 0 ? `${pct(s.accuracy)} (n=${n(s.labeled_count,0)})` : "—";
+      document.getElementById("tcPrimBps").textContent = n(p.avg_signed_bps, 2);
+      document.getElementById("tcSecBps").textContent = s.raw_count > 0 ? n(s.avg_signed_bps, 2) : "—";
+      const accDeltaEl = document.getElementById("tcAccDelta");
+      accDeltaEl.textContent = s.raw_count > 0 ? (accDelta >= 0 ? "+" : "") + (accDelta * 100).toFixed(1) + "pp" : "—";
+      accDeltaEl.style.color = s.raw_count > 0 ? deltaColor(accDelta) : "";
+      const bpsDeltaEl = document.getElementById("tcBpsDelta");
+      bpsDeltaEl.textContent = s.raw_count > 0 ? (bpsDelta >= 0 ? "+" : "") + n(bpsDelta, 2) : "—";
+      bpsDeltaEl.style.color = s.raw_count > 0 ? deltaColor(bpsDelta) : "";
+      document.getElementById("tcPrimCostCorr").textContent = p.labeled_count > 0 ? "$" + n(p.cost_per_correct, 4) : "—";
+      document.getElementById("tcSecCostCorr").textContent = s.raw_count > 0 && s.labeled_count > 0 ? "$" + n(s.cost_per_correct, 4) : "—";
+      const reasons = tc.secondary_reasons || [];
+      const rEl = document.getElementById("tcReasonsTable");
+      if (rEl && reasons.length > 0) {
+        const body = reasons.map((r) => `<tr><td>${esc(r.reason)}</td><td>${r.count}</td></tr>`).join("");
+        rEl.innerHTML = `<thead><tr><th>Escalation Reason</th><th>Count</th></tr></thead><tbody>${body}</tbody>`;
+      }
+    }
     function setHeaderChips(status, gate) {
       const cWorker = document.getElementById("chipWorker");
       const cGate = document.getElementById("chipGoLive");
@@ -1894,7 +1935,8 @@ def home() -> str:
           causesRes,
           automationRes,
           readinessRes,
-          reasoningRes
+          reasoningRes,
+          tierRes
         ] = await Promise.all([
           fetchJson("/api/status"),
           fetchJson("/api/account"),
@@ -1953,6 +1995,9 @@ def home() -> str:
             : Promise.resolve({}),
           analyticsActive && activeAnalyticsSubtab === "reasoning"
             ? fetchJson("/api/research/reasoning-analysis?lookback=5000&min_count=5&top_n=40")
+            : Promise.resolve({}),
+          analyticsActive && activeAnalyticsSubtab === "cc"
+            ? fetchJson("/api/research/tier-comparison?lookback=5000&horizon_minutes=15&quality_mode=good_only")
             : Promise.resolve({})
         ]);
 
@@ -2003,6 +2048,7 @@ def home() -> str:
         if (qualityRes.prediction_quality) renderPredictionQuality(qualityRes, controlsRes);
         if (symbolPerfRes.symbol_performance) renderSymbolGate(symbolPerfRes);
         if (ccRes.champion_challenger_daily) renderChampionChallenger(ccRes, ccShortRes);
+        if (tierRes.tier_comparison) renderTierComparison(tierRes);
         if (cbRes.cell_leaderboard_bootstrap) renderCellBootstrap(cbRes);
         if (inventoryRes.feature_inventory) renderFeatureInventory(inventoryRes);
         if (patternRes.pattern_leaderboard) renderPatternLeaderboard(patternRes);
@@ -2320,6 +2366,21 @@ def api_context_leaderboard(
             min_labels=min_labels,
             stress_bps=stress_bps,
             min_accuracy=min_accuracy,
+        )
+    }
+
+
+@app.get("/api/research/tier-comparison")
+def api_tier_comparison(
+    lookback: int = Query(default=5000, ge=1, le=50000),
+    horizon_minutes: int = Query(default=15, ge=1, le=390),
+    quality_mode: str = Query(default="good_only", pattern="^(all|good_only)$"),
+) -> dict:
+    return {
+        "tier_comparison": service.tier_comparison_report(
+            lookback=lookback,
+            horizon_minutes=horizon_minutes,
+            quality_mode=quality_mode,
         )
     }
 
