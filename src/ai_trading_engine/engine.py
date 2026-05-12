@@ -764,8 +764,6 @@ class TradingEngine:
         return (spread / quote.last) * 10000.0
 
     def _session_bucket(self, now_utc: datetime) -> str:
-        if not self.settings.enable_session_filter:
-            return "session_filter_disabled"
         et = now_utc.astimezone(self._market_tz())
         minutes = et.hour * 60 + et.minute
         open_start = 9 * 60 + 30
