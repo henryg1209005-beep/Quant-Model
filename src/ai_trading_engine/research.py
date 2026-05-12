@@ -185,7 +185,7 @@ def run_walk_forward(
     samples: list[ResearchSample],
     *,
     folds: int = 4,
-    min_train: int = 40,
+    min_train: int = 100,
     min_test: int = 60,
     bins: int = 10,
 ) -> dict[str, Any]:
@@ -217,8 +217,12 @@ def run_walk_forward(
 
         train = data[:train_end]
         test = data[test_start:test_end]
-        maps = _build_expectancy_maps(train, bins=bins)
-        threshold, train_best = _best_threshold(train, maps, bins=bins)
+        # Build maps on first 80% of train; pick threshold on last 20% to avoid in-sample bias.
+        fit_split = max(5, int(len(train) * 0.8))
+        fit_set = train[:fit_split]
+        val_set = train[fit_split:]
+        maps = _build_expectancy_maps(fit_set, bins=bins)
+        threshold, train_best = _best_threshold(val_set if val_set else train, maps, bins=bins)
         test_preds = [_predict_expectancy(s, maps, bins=bins) for s in test]
         test_selected = [s for s, p in zip(test, test_preds) if p >= threshold]
 

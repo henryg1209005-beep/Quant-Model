@@ -305,7 +305,7 @@ def run_predictive_walk_forward(
     samples: list[PredictiveSample],
     *,
     folds: int = 4,
-    min_train: int = 40,
+    min_train: int = 100,
     min_test: int = 60,
     n_estimators: int = 80,
     learning_rate: float = 0.1,
@@ -362,12 +362,12 @@ def run_predictive_walk_forward(
         calibrator = IsotonicCalibrator()
         calibrator.fit(raw_cal, y_cal)
 
-        x_train_all = _feature_matrix(train, regime_levels)
-        train_probs = calibrator.predict(model.predict_proba(x_train_all))
-        model_thr, model_train_metrics = _best_threshold(train, train_probs)
+        # Use calib_train for threshold selection: GBM was not fit on it, so it is genuinely held-out.
+        calib_model_probs = calibrator.predict(raw_cal)
+        model_thr, model_train_metrics = _best_threshold(calib_train, calib_model_probs)
 
-        baseline_probs_train = [_clip(s.confidence, 0.0, 1.0) for s in train]
-        base_thr, base_train_metrics = _best_threshold(train, baseline_probs_train)
+        baseline_probs_calib = [_clip(s.confidence, 0.0, 1.0) for s in calib_train]
+        base_thr, base_train_metrics = _best_threshold(calib_train, baseline_probs_calib)
 
         x_test = _feature_matrix(test, regime_levels)
         test_model_probs = calibrator.predict(model.predict_proba(x_test))

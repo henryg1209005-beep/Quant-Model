@@ -4115,6 +4115,7 @@ class TradingAppService:
         min_labels: int = 20,
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4258,6 +4259,7 @@ class TradingAppService:
         min_accuracy: float = 0.50,
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4354,6 +4356,7 @@ class TradingAppService:
         min_accuracy: float = 0.50,
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4573,6 +4576,7 @@ class TradingAppService:
         robust_only: bool = False,
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4658,6 +4662,7 @@ class TradingAppService:
         min_cell_labels: int = 20,
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),
@@ -4752,6 +4757,7 @@ class TradingAppService:
         direction: str = "ALL",
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),
@@ -4904,6 +4910,7 @@ class TradingAppService:
         multipliers: tuple[float, ...] = (1.0, 1.5, 2.0),
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
+        rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),
@@ -5525,8 +5532,8 @@ class TradingAppService:
         *,
         lookback: int = 10000,
         folds: int = 4,
-        min_train: int = 40,
-        min_test: int = 20,
+        min_train: int = 100,
+        min_test: int = 60,
         bins: int = 10,
     ) -> dict[str, Any]:
         max_rows = max(1, min(50000, int(lookback)))
@@ -5568,8 +5575,8 @@ class TradingAppService:
         *,
         lookback: int = 10000,
         folds: int = 4,
-        min_train: int = 40,
-        min_test: int = 20,
+        min_train: int = 100,
+        min_test: int = 60,
         n_estimators: int = 80,
         learning_rate: float = 0.1,
         max_bins: int = 16,
