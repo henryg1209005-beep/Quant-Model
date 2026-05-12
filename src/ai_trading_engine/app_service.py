@@ -245,6 +245,7 @@ class TradingAppService:
         self._rollover_daily_state_if_needed()
         self._persistence.save_account(self._engine.account)
         self._save_runtime_config()
+        self._persistence.backfill_session_buckets()
         if self._settings.auto_retrain_enabled:
             self._automation_thread = threading.Thread(
                 target=self._automation_loop,
@@ -4449,6 +4450,15 @@ class TradingAppService:
             "allowed": allowed[:50],
             "allowed_count": int(len(allowed)),
         }
+
+    def backfill_session_buckets(self) -> dict[str, Any]:
+        result = self._persistence.backfill_session_buckets()
+        with self._lock:
+            self._last_note = (
+                f"session bucket backfill: {result['updated']} updated, "
+                f"{result['skipped']} already correct"
+            )
+        return result
 
     def reasoning_analysis_report(
         self,

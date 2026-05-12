@@ -2785,6 +2785,11 @@ def api_research_daily_run(force: bool = Query(default=True)) -> dict:
     return {"daily_research": service.run_daily_research_automation(force=force)}
 
 
+@app.post("/api/research/backfill-session-buckets")
+def api_backfill_session_buckets() -> dict:
+    return {"backfill": service.backfill_session_buckets()}
+
+
 @app.post("/api/research/weekly-experiments")
 def api_research_weekly_experiments(force: bool = Query(default=True)) -> dict:
     return {"weekly_experiments": service.run_weekly_experiments(force=force)}
