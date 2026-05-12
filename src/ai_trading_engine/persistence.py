@@ -405,6 +405,66 @@ class _SqlitePersistence:
                 updated += 1
         return {"updated": updated, "skipped": skipped, "total": updated + skipped}
 
+    def freeze_hold_out_set(
+        self, fraction: float = 0.15, min_n: int = 50, max_n: int = 500
+    ) -> dict[str, Any]:
+        """Mark the most-recent N samples as frozen hold-out. Idempotent once any are frozen."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, payload_json FROM data_samples ORDER BY id DESC"
+            ).fetchall()
+        total = len(rows)
+        already_frozen = sum(
+            1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False)
+        )
+        if already_frozen > 0:
+            return {"frozen": 0, "already_frozen": already_frozen, "total": total, "skipped": True}
+        if total < int(min_n):
+            return {"frozen": 0, "already_frozen": 0, "total": total, "skipped": True, "reason": "insufficient_data"}
+        n_freeze = max(int(min_n), min(int(max_n), int(round(total * float(fraction)))))
+        to_freeze = rows[:n_freeze]
+        frozen = 0
+        with self._conn() as conn:
+            for row in to_freeze:
+                try:
+                    payload = json.loads(row["payload_json"])
+                except Exception:
+                    continue
+                payload["hold_out"] = True
+                conn.execute(
+                    "UPDATE data_samples SET payload_json = ? WHERE id = ?",
+                    (json.dumps(payload, ensure_ascii=True), row["id"]),
+                )
+                frozen += 1
+        return {"frozen": frozen, "already_frozen": 0, "total": total, "skipped": False}
+
+    def get_hold_out_status(self) -> dict[str, Any]:
+        with self._conn() as conn:
+            rows = conn.execute("SELECT payload_json FROM data_samples").fetchall()
+        total = len(rows)
+        frozen = sum(1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False))
+        return {
+            "total": total,
+            "frozen": frozen,
+            "training": total - frozen,
+            "fraction": round(frozen / max(1, total), 4),
+            "has_hold_out": frozen > 0,
+        }
+
+    def list_hold_out_samples(self, limit: int = 10000) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT payload_json FROM data_samples ORDER BY id DESC"
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            p = json.loads(row["payload_json"])
+            if bool(p.get("hold_out", False)):
+                result.append(p)
+                if len(result) >= int(limit):
+                    break
+        return result
+
     def export_data_samples_csv(self, limit: int = 10000) -> str:
         rows = self.list_data_samples(limit)
         fieldnames = [
@@ -835,6 +895,118 @@ class _PostgresPersistence:
         if row is None:
             return None
         return json.loads(row["payload_json"])
+
+    def backfill_session_buckets(self, tz_name: str = "America/New_York") -> dict[str, Any]:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+
+        def _compute_bucket(ts_str: str) -> str:
+            try:
+                dt = datetime.fromisoformat(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                et = dt.astimezone(tz)
+                m = et.hour * 60 + et.minute
+                if m < (9 * 60 + 30) or m > 16 * 60:
+                    return "outside"
+                if m <= (10 * 60 + 30):
+                    return "open"
+                if m >= 15 * 60:
+                    return "close"
+                return "midday"
+            except Exception:
+                return "unknown"
+
+        updated = 0
+        skipped = 0
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, payload_json FROM data_samples")
+                rows = cur.fetchall()
+            for row in rows:
+                try:
+                    payload = json.loads(row["payload_json"])
+                except Exception:
+                    skipped += 1
+                    continue
+                current = str(payload.get("session_bucket") or "")
+                if current not in ("", "session_filter_disabled"):
+                    skipped += 1
+                    continue
+                ts_str = str(payload.get("timestamp") or "")
+                if not ts_str:
+                    skipped += 1
+                    continue
+                payload["session_bucket"] = _compute_bucket(ts_str)
+                with conn.cursor() as cur2:
+                    cur2.execute(
+                        "UPDATE data_samples SET payload_json = %s WHERE id = %s",
+                        (json.dumps(payload, ensure_ascii=True), row["id"]),
+                    )
+                updated += 1
+        return {"updated": updated, "skipped": skipped, "total": updated + skipped}
+
+    def freeze_hold_out_set(
+        self, fraction: float = 0.15, min_n: int = 50, max_n: int = 500
+    ) -> dict[str, Any]:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, payload_json FROM data_samples ORDER BY id DESC")
+                rows = cur.fetchall()
+        total = len(rows)
+        already_frozen = sum(
+            1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False)
+        )
+        if already_frozen > 0:
+            return {"frozen": 0, "already_frozen": already_frozen, "total": total, "skipped": True}
+        if total < int(min_n):
+            return {"frozen": 0, "already_frozen": 0, "total": total, "skipped": True, "reason": "insufficient_data"}
+        n_freeze = max(int(min_n), min(int(max_n), int(round(total * float(fraction)))))
+        to_freeze = rows[:n_freeze]
+        frozen = 0
+        with self._conn() as conn:
+            for row in to_freeze:
+                try:
+                    payload = json.loads(row["payload_json"])
+                except Exception:
+                    continue
+                payload["hold_out"] = True
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE data_samples SET payload_json = %s WHERE id = %s",
+                        (json.dumps(payload, ensure_ascii=True), row["id"]),
+                    )
+                frozen += 1
+        return {"frozen": frozen, "already_frozen": 0, "total": total, "skipped": False}
+
+    def get_hold_out_status(self) -> dict[str, Any]:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT payload_json FROM data_samples")
+                rows = cur.fetchall()
+        total = len(rows)
+        frozen = sum(1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False))
+        return {
+            "total": total,
+            "frozen": frozen,
+            "training": total - frozen,
+            "fraction": round(frozen / max(1, total), 4),
+            "has_hold_out": frozen > 0,
+        }
+
+    def list_hold_out_samples(self, limit: int = 10000) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT payload_json FROM data_samples ORDER BY id DESC")
+                rows = cur.fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            p = json.loads(row["payload_json"])
+            if bool(p.get("hold_out", False)):
+                result.append(p)
+                if len(result) >= int(limit):
+                    break
+        return result
 
 
 class Persistence:

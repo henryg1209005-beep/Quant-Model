@@ -4117,6 +4117,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4261,6 +4262,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4358,6 +4360,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4460,6 +4463,97 @@ class TradingAppService:
             )
         return result
 
+    def freeze_hold_out_set(
+        self, fraction: float = 0.15, min_n: int = 50, max_n: int = 500
+    ) -> dict[str, Any]:
+        result = self._persistence.freeze_hold_out_set(
+            fraction=float(fraction), min_n=int(min_n), max_n=int(max_n)
+        )
+        with self._lock:
+            frozen = int(result.get("frozen", 0))
+            self._last_note = (
+                f"hold_out freeze: {frozen} samples frozen "
+                f"(total={result.get('total', 0)}, skipped={result.get('skipped', False)})"
+            )
+        return result
+
+    def hold_out_validation_report(
+        self,
+        *,
+        horizons_minutes: tuple[int, ...] = (5, 15, 30),
+        quality_mode: str = "good_only",
+        min_hold_out: int = 30,
+    ) -> dict[str, Any]:
+        status = self._persistence.get_hold_out_status()
+        if not bool(status.get("has_hold_out", False)):
+            return {
+                "ok": False,
+                "reason": "no_hold_out_set_frozen",
+                "status": status,
+                "recommendation": "call POST /api/research/freeze-hold-out first",
+            }
+        rows = self._persistence.list_hold_out_samples(limit=10000)
+        rows = [
+            r for r in rows
+            if not bool(
+                dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get(
+                    "state_gate_used_cache", False
+                )
+            )
+        ]
+        if len(rows) < int(min_hold_out):
+            return {
+                "ok": False,
+                "reason": "insufficient_hold_out_samples",
+                "hold_out_count": len(rows),
+                "min_hold_out": int(min_hold_out),
+                "status": status,
+            }
+        labels_report = build_prediction_labels(
+            list(reversed(rows)),
+            horizons_minutes=horizons_minutes,
+            min_confidence=0.0,
+            quality_mode=quality_mode,
+            **self._research_label_filters(),
+        )
+        horizons_out: dict[int, dict[str, Any]] = {}
+        for h in horizons_minutes:
+            labels = labels_report.get("labels_by_horizon", {}).get(int(h), [])
+            n = len(labels)
+            if n == 0:
+                horizons_out[int(h)] = {"labeled_count": 0, "win_rate": 0.0, "signed_bps": 0.0}
+                continue
+            signed = [float(r.get("signed_return_bps", 0.0)) for r in labels]
+            wins = sum(1 for s in signed if s > 0)
+            win_rate = wins / float(n)
+            signed_bps = sum(signed) / float(n)
+            z = 1.96
+            p_hat = win_rate
+            z2_n = (z * z) / float(n)
+            denom = 1.0 + z2_n
+            center = (p_hat + z2_n / 2.0) / denom
+            margin = (z * math.sqrt((p_hat * (1.0 - p_hat) + z2_n / 4.0) / float(n))) / denom
+            ci_low = max(0.0, min(1.0, center - margin))
+            ci_high = max(0.0, min(1.0, center + margin))
+            horizons_out[int(h)] = {
+                "labeled_count": n,
+                "win_rate": round(win_rate, 4),
+                "signed_bps": round(signed_bps, 4),
+                "win_rate_ci_low": round(ci_low, 4),
+                "win_rate_ci_high": round(ci_high, 4),
+                "pass": bool(win_rate > 0.50 and ci_low > 0.40 and signed_bps > 0.0),
+            }
+        any_horizon_passes = any(v.get("pass", False) for v in horizons_out.values())
+        return {
+            "ok": True,
+            "status": status,
+            "hold_out_raw_count": len(rows),
+            "quality_mode": quality_mode,
+            "horizons": horizons_out,
+            "pass": any_horizon_passes,
+            "recommendation": "promote" if any_horizon_passes else "hold_or_retrain",
+        }
+
     def reasoning_analysis_report(
         self,
         *,
@@ -4482,6 +4576,7 @@ class TradingAppService:
         quality_mode: str = "good_only",
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(50000, int(lookback))))
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         primary_rows: list[dict[str, Any]] = []
         secondary_rows: list[dict[str, Any]] = []
         cached_count = 0
@@ -4587,6 +4682,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels_report = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=horizons_minutes,
@@ -4673,6 +4769,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),
@@ -4768,6 +4865,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),
@@ -4921,6 +5019,7 @@ class TradingAppService:
     ) -> dict[str, Any]:
         rows = self._persistence.list_data_samples(max(1, min(100000, int(lookback))))
         rows = [r for r in rows if not bool(dict(dict(r.get("metadata") or {}).get("llm_routing") or {}).get("state_gate_used_cache", False))]
+        rows = [r for r in rows if not bool(r.get("hold_out", False))]
         labels = build_prediction_labels(
             list(reversed(rows)),
             horizons_minutes=(int(horizon_minutes),),

@@ -2790,6 +2790,45 @@ def api_backfill_session_buckets() -> dict:
     return {"backfill": service.backfill_session_buckets()}
 
 
+@app.post("/api/research/freeze-hold-out")
+def api_freeze_hold_out(
+    fraction: float = Query(default=0.15, ge=0.05, le=0.40),
+    min_n: int = Query(default=50, ge=10, le=10000),
+    max_n: int = Query(default=500, ge=10, le=50000),
+) -> dict:
+    return {"freeze": service.freeze_hold_out_set(fraction=fraction, min_n=min_n, max_n=max_n)}
+
+
+@app.get("/api/research/hold-out-status")
+def api_hold_out_status() -> dict:
+    return {"hold_out": service._persistence.get_hold_out_status()}
+
+
+@app.get("/api/research/hold-out-validation")
+def api_hold_out_validation(
+    horizons: str = Query(default="5,15,30"),
+    quality_mode: str = Query(default="good_only"),
+    min_hold_out: int = Query(default=30, ge=5, le=10000),
+) -> dict:
+    parsed: list[int] = []
+    for part in horizons.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= value <= 390 and value not in parsed:
+            parsed.append(value)
+    if not parsed:
+        parsed = [15]
+    return {
+        "hold_out_validation": service.hold_out_validation_report(
+            horizons_minutes=tuple(parsed),
+            quality_mode=quality_mode,
+            min_hold_out=min_hold_out,
+        )
+    }
+
+
 @app.post("/api/research/weekly-experiments")
 def api_research_weekly_experiments(force: bool = Query(default=True)) -> dict:
     return {"weekly_experiments": service.run_weekly_experiments(force=force)}
