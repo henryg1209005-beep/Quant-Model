@@ -156,6 +156,7 @@ class TradingEngine:
                 temperature=self.settings.gemini_temperature,
                 timeout_seconds=self.settings.gemini_timeout_seconds,
                 max_output_tokens=self.settings.llm_max_output_tokens,
+                max_retries=self.settings.llm_request_retries,
             )
         if self.settings.llm_provider == "openai":
             return OpenAiLlmClient(
@@ -178,6 +179,7 @@ class TradingEngine:
                     temperature=self.settings.gemini_temperature,
                     timeout_seconds=self.settings.gemini_timeout_seconds,
                     max_output_tokens=self.settings.llm_max_output_tokens,
+                    max_retries=self.settings.llm_request_retries,
                 )
             if provider == "openai":
                 return OpenAiLlmClient(

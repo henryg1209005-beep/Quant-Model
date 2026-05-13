@@ -18,11 +18,13 @@ class GeminiLlmClient(LlmClient):
         temperature: float | None = None,
         timeout_seconds: int = 30,
         max_output_tokens: int | None = None,
+        max_retries: int = 1,
     ) -> None:
-        self._model = (model or "gemini-2.5-flash").strip()
+        self._model = (model or "gemini-1.5-flash-8b").strip()
         self._temperature = temperature
         self._timeout_seconds = max(1, int(timeout_seconds))
         self._max_output_tokens = max_output_tokens if max_output_tokens and max_output_tokens > 0 else None
+        self._max_retries = max(1, int(max_retries))
         self._api_key = os.getenv("GEMINI_API_KEY", "")
         if not self._api_key:
             raise RuntimeError("GEMINI_API_KEY is not set")
@@ -33,6 +35,7 @@ class GeminiLlmClient(LlmClient):
             f"{quote(self._model, safe='')}:generateContent?key={quote(self._api_key, safe='')}"
         )
         generation_config: dict[str, object] = {
+            "thinkingConfig": {"thinkingBudget": 0},
             "responseMimeType": "application/json",
             "responseSchema": {
                 "type": "OBJECT",
@@ -74,7 +77,8 @@ class GeminiLlmClient(LlmClient):
         body = json.dumps(payload).encode("utf-8")
         data = None
         last_error: Exception | None = None
-        for attempt in range(3):
+        max_attempts = self._max_retries
+        for attempt in range(max_attempts):
             req = Request(
                 url,
                 data=body,
@@ -87,14 +91,14 @@ class GeminiLlmClient(LlmClient):
                 break
             except HTTPError as exc:
                 last_error = exc
-                if exc.code not in {429, 500, 502, 503, 504} or attempt == 2:
+                if exc.code not in {429, 500, 502, 503, 504} or attempt == max_attempts - 1:
                     raise
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(0.5 * (attempt + 1))
             except Exception as exc:
                 last_error = exc
-                if attempt == 2:
+                if attempt == max_attempts - 1:
                     raise
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(0.5 * (attempt + 1))
 
         if data is None:
             raise RuntimeError(f"Gemini request failed: {last_error}")
