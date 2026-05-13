@@ -35,7 +35,6 @@ class GeminiLlmClient(LlmClient):
             f"{quote(self._model, safe='')}:generateContent?key={quote(self._api_key, safe='')}"
         )
         generation_config: dict[str, object] = {
-            "thinkingConfig": {"thinkingBudget": 0},
             "responseMimeType": "application/json",
             "responseSchema": {
                 "type": "OBJECT",
@@ -64,6 +63,8 @@ class GeminiLlmClient(LlmClient):
                 ],
             },
         }
+        if "gemini-2." in self._model:
+            generation_config["thinkingConfig"] = {"thinkingBudget": 0}
         if self._temperature is not None:
             generation_config["temperature"] = float(self._temperature)
         if self._max_output_tokens is not None:
