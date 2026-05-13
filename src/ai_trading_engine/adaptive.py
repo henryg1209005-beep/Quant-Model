@@ -28,8 +28,9 @@ class AdaptiveAction:
 class AdaptiveLearner:
     """Online performance learner for regime/direction sizing and confidence calibration."""
 
-    def __init__(self, state_path: str, enabled: bool = True) -> None:
+    def __init__(self, state_path: str, enabled: bool = True, window: int = 50) -> None:
         self._enabled = enabled
+        self._window = max(10, int(window))
         self._state_path = Path(state_path)
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
         self._state = self._load_state()
@@ -59,11 +60,15 @@ class AdaptiveLearner:
     def _rd_key(regime: str, direction: str) -> str:
         return f"{regime}|{direction}"
 
-    @staticmethod
-    def _update_bucket(bucket: dict[str, float], pnl: float) -> None:
-        count = int(bucket.get("count", 0)) + 1
-        wins = int(bucket.get("wins", 0)) + (1 if pnl > 0 else 0)
-        total = float(bucket.get("total_pnl", 0.0)) + pnl
+    def _update_bucket(self, bucket: dict[str, Any], pnl: float) -> None:
+        history: list[float] = list(bucket.get("pnl_history") or [])
+        history.append(pnl)
+        if len(history) > self._window:
+            history = history[-self._window:]
+        count = len(history)
+        wins = sum(1 for p in history if p > 0)
+        total = sum(history)
+        bucket["pnl_history"] = history
         bucket["count"] = count
         bucket["wins"] = wins
         bucket["total_pnl"] = total
@@ -129,7 +134,7 @@ class AdaptiveLearner:
         win_rate = float(bucket.get("win_rate", 0.5))
         avg_pnl = float(bucket.get("avg_pnl", 0.0))
 
-        if count >= 8 and win_rate < 0.35:
+        if count >= 20 and win_rate < 0.35:
             return AdaptiveAction(
                 decision=AiDecision(
                     action="hold",
