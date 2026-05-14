@@ -64,7 +64,8 @@ class GeminiLlmClient(LlmClient):
             },
         }
         if "gemini-2." in self._model:
-            generation_config["thinkingConfig"] = {"thinkingBudget": 0}
+            # thinkingBudget:0 causes responses to truncate at {"action": — use 512 minimum
+            generation_config["thinkingConfig"] = {"thinkingBudget": 512}
         if self._temperature is not None:
             generation_config["temperature"] = float(self._temperature)
         if self._max_output_tokens is not None:
@@ -121,4 +122,12 @@ class GeminiLlmClient(LlmClient):
         if not text:
             reason_text = ",".join(finish_reasons) if finish_reasons else "unknown"
             raise RuntimeError(f"Gemini returned empty content: finish_reason={reason_text} payload={data}")
+        # A valid JSON response is always longer than ~20 chars.  If we got a
+        # structural stub (e.g. '{\n  "action":') the thinking budget was too
+        # low to complete the response — surface this as an error so the caller
+        # can retry rather than storing garbage in llm_raw.
+        if len(text) < 20 and finish_reasons and any(r in {"MAX_TOKENS", "OTHER", "STOP"} for r in finish_reasons):
+            raise RuntimeError(
+                f"Gemini response appears truncated ({len(text)} chars, finish_reason={','.join(finish_reasons)}): {text!r}"
+            )
         return text

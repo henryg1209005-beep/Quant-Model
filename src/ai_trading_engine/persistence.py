@@ -169,6 +169,18 @@ class _SqlitePersistence:
                 );
                 """
             )
+            # Schema migration: add columns introduced after initial table creation.
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(data_samples)").fetchall()}
+            migrations = [
+                ("in_position", "INTEGER NOT NULL DEFAULT 0"),
+                ("quality_collect_only_forced", "INTEGER NOT NULL DEFAULT 0"),
+                ("order_key", "TEXT NOT NULL DEFAULT ''"),
+                ("hold_out", "INTEGER NOT NULL DEFAULT 0"),
+            ]
+            for col_name, col_def in migrations:
+                if col_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE data_samples ADD COLUMN {col_name} {col_def}")
+            conn.commit()
 
     @staticmethod
     def _sample_record(cycle: CycleResult, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -837,6 +849,16 @@ class _PostgresPersistence:
                     );
                     """
                 )
+                # Schema migration: add columns introduced after initial table creation.
+                for col_name, col_type in [
+                    ("in_position", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                    ("quality_collect_only_forced", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                    ("order_key", "TEXT NOT NULL DEFAULT ''"),
+                    ("hold_out", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                ]:
+                    cur.execute(
+                        f"ALTER TABLE data_samples ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
+                    )
 
     def save_runtime_config(self, cfg: RuntimeConfig) -> None:
         now = datetime.now(tz=timezone.utc).isoformat()

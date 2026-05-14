@@ -774,10 +774,18 @@ class TradingAppService:
         signed_cur = float(metrics.get("avg_signed_return_bps", 0.0) or 0.0)
         acc_cur = float(metrics.get("accuracy", 0.0) or 0.0)
         bootstrap_collecting = n_cur < min_labels
+        # If all labels share a single direction, the pool is almost certainly
+        # composed entirely of LLM fallback decisions (which always predict the
+        # same default direction). Treat this as bootstrap mode so the gate
+        # does not permanently lock based on LLM failure artifacts.
+        by_direction = h.get("by_direction") or {}
+        active_dirs = {d for d, m in by_direction.items() if int(m.get("count", 0) or 0) > 0}
+        if len(active_dirs) <= 1 and n_cur > 0:
+            bootstrap_collecting = True
         blocked = (not bootstrap_collecting) and (symbol not in set(allowed))
         if bootstrap_collecting:
             reason = (
-                f"{symbol} bootstrap collect mode (n={n_cur} < min_labels={min_labels}); "
+                f"{symbol} bootstrap collect mode (n={n_cur} < min_labels={min_labels} or no direction diversity); "
                 "symbol gate not blocking while labels accumulate"
             )
         else:
@@ -799,6 +807,7 @@ class TradingAppService:
                     "min_signed_bps": min_signed,
                     "min_accuracy": min_acc,
                     "bootstrap_collecting": bootstrap_collecting,
+                    "direction_diversity": sorted(active_dirs),
                     "current_symbol": symbol,
                     "current_symbol_metrics": {
                         "count": n_cur,
