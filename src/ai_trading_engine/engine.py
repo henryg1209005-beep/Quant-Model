@@ -1070,6 +1070,7 @@ class TradingEngine:
             challenger_trade=challenger_trade,
         )
 
+        _submitted_order_key = ""
         if decision.action == "trade" and bool(collect_only):
             decision.action = "hold"
             decision.direction = None
@@ -1088,6 +1089,7 @@ class TradingEngine:
                 f"{self.settings.symbol}|{decision.direction}|{decision.size}|{decision.sl_ticks}|"
                 f"{decision.tp_ticks}|{quote.timestamp.isoformat()}"
             )
+            decision.reasoning = f"[OK:{order_key}] {decision.reasoning}"
             risk_result = evaluate_pre_trade_risk(
                 account=self.account,
                 decision=decision,
@@ -1122,6 +1124,7 @@ class TradingEngine:
                     self._last_order_key = order_key
                     self._last_order_submitted_at = datetime.now(tz=timezone.utc)
                     self.account.todays_trade_count += 1
+                    _submitted_order_key = order_key
                     note = f"Placed {decision.direction} x{decision.size} @ {quote.last:.2f}"
                     append_audit_event(
                         self.settings.audit_log_path,
@@ -1222,5 +1225,6 @@ class TradingEngine:
                 },
                 "llm_routing": llm_routing,
                 "in_position": bool(in_position_before_cycle),
+                "order_key": _submitted_order_key,
             },
         )

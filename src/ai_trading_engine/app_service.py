@@ -3261,6 +3261,19 @@ class TradingAppService:
             closed = engine.account.closed_trades_today[-1]
             closed.metadata = metadata
             self._persistence.save_closed_trade(closed)
+            _ok_match = re.search(r'\[OK:([^\]]+)\]', closed.thesis or "")
+            if _ok_match:
+                _hold_min = (closed.closed_at - closed.opened_at).total_seconds() / 60.0
+                self._persistence.save_trade_outcome(
+                    order_key=_ok_match.group(1),
+                    symbol=closed.symbol,
+                    direction=closed.direction,
+                    entry_price=closed.entry_price,
+                    exit_price=closed.exit_price,
+                    pnl=closed.pnl,
+                    hold_minutes=_hold_min,
+                    closed_at=closed.closed_at,
+                )
             self._notify(
                 "shadow_position_closed",
                 {
@@ -3828,6 +3841,19 @@ class TradingAppService:
             closed = self._engine.account.closed_trades_today[-1]
             closed.metadata = metadata
             self._persistence.save_closed_trade(closed)
+            _ok_match = re.search(r'\[OK:([^\]]+)\]', closed.thesis or "")
+            if _ok_match:
+                _hold_min = (closed.closed_at - closed.opened_at).total_seconds() / 60.0
+                self._persistence.save_trade_outcome(
+                    order_key=_ok_match.group(1),
+                    symbol=closed.symbol,
+                    direction=closed.direction,
+                    entry_price=closed.entry_price,
+                    exit_price=closed.exit_price,
+                    pnl=closed.pnl,
+                    hold_minutes=_hold_min,
+                    closed_at=closed.closed_at,
+                )
             self._notify(
                 "position_closed",
                 {

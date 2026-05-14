@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import statistics
 from bisect import bisect_left
 from dataclasses import dataclass
@@ -253,6 +254,56 @@ def _calibration_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _null_baseline(rows: list[dict[str, Any]], n_iter: int = 500) -> dict[str, Any]:
+    """Random-direction model: coin-flip the direction, keep actual forward returns."""
+    empty = {
+        "n_iter": n_iter,
+        "null_accuracy_mean": 0.5,
+        "null_accuracy_std": 0.0,
+        "null_bps_mean": 0.0,
+        "null_bps_std": 0.0,
+        "actual_accuracy": 0.0,
+        "actual_bps": 0.0,
+        "accuracy_z_score": 0.0,
+        "bps_z_score": 0.0,
+    }
+    if not rows:
+        return empty
+    forwards = [float(r["forward_return_bps"]) for r in rows]
+    actual_signed = [float(r["signed_return_bps"]) for r in rows]
+    actual_accuracy = sum(1 for s in actual_signed if s > 0) / len(rows)
+    actual_bps = sum(actual_signed) / len(rows)
+    rng = random.Random(42)
+    null_accuracies: list[float] = []
+    null_bps_list: list[float] = []
+    for _ in range(n_iter):
+        correct = 0
+        total_bps = 0.0
+        for fwd in forwards:
+            side = 1.0 if rng.random() < 0.5 else -1.0
+            s = fwd * side
+            if s > 0:
+                correct += 1
+            total_bps += s
+        null_accuracies.append(correct / len(forwards))
+        null_bps_list.append(total_bps / len(forwards))
+    null_acc_mean = sum(null_accuracies) / n_iter
+    null_bps_mean = sum(null_bps_list) / n_iter
+    null_acc_std = statistics.stdev(null_accuracies) if n_iter > 1 else 0.0
+    null_bps_std = statistics.stdev(null_bps_list) if n_iter > 1 else 0.0
+    return {
+        "n_iter": n_iter,
+        "null_accuracy_mean": null_acc_mean,
+        "null_accuracy_std": null_acc_std,
+        "null_bps_mean": null_bps_mean,
+        "null_bps_std": null_bps_std,
+        "actual_accuracy": actual_accuracy,
+        "actual_bps": actual_bps,
+        "accuracy_z_score": (actual_accuracy - null_acc_mean) / null_acc_std if null_acc_std > 0.0 else 0.0,
+        "bps_z_score": (actual_bps - null_bps_mean) / null_bps_std if null_bps_std > 0.0 else 0.0,
+    }
+
+
 def _filter_samples_by_quality(samples: list[dict[str, Any]], quality_mode: str) -> list[dict[str, Any]]:
     mode = str(quality_mode or "all").strip().lower()
     if mode == "good_only":
@@ -290,6 +341,7 @@ def build_prediction_labels(
     allowed_session_buckets: tuple[str, ...] | None = None,
     included_confidence_sources: tuple[str, ...] | None = None,
     max_match_gap_seconds: float = 90.0,
+    cost_bps: float = 3.0,
 ) -> dict[str, Any]:
     filtered_samples = _filter_samples_by_quality(samples, quality_mode)
     by_symbol = _points_by_symbol(filtered_samples)
@@ -339,6 +391,7 @@ def build_prediction_labels(
                         continue
                 forward_bps = ((future.price / point.price) - 1.0) * 10000.0
                 signed_bps = forward_bps * side
+                net_signed_bps = signed_bps - float(cost_bps)
                 feature_patterns = dict(sample.get("feature_patterns") or {})
                 feature_structure = dict(sample.get("feature_structure") or {})
                 labels_by_horizon[int(horizon)].append(
@@ -379,7 +432,10 @@ def build_prediction_labels(
                         "future_price": future.price,
                         "forward_return_bps": forward_bps,
                         "signed_return_bps": signed_bps,
+                        "cost_bps": float(cost_bps),
+                        "net_signed_return_bps": net_signed_bps,
                         "correct": signed_bps > 0,
+                        "net_correct": net_signed_bps > 0,
                     }
                 )
 
@@ -411,6 +467,7 @@ def build_prediction_quality_report(
     allowed_session_buckets: tuple[str, ...] | None = None,
     included_confidence_sources: tuple[str, ...] | None = None,
     max_match_gap_seconds: float = 90.0,
+    cost_bps: float = 3.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -421,13 +478,26 @@ def build_prediction_quality_report(
         allowed_session_buckets=allowed_session_buckets,
         included_confidence_sources=included_confidence_sources,
         max_match_gap_seconds=max_match_gap_seconds,
+        cost_bps=cost_bps,
     )
     labels_by_horizon = label_report["labels_by_horizon"]
     horizons: dict[str, Any] = {}
     for horizon, labels in labels_by_horizon.items():
+        avg_net_bps = (
+            sum(float(r.get("net_signed_return_bps", 0.0)) for r in labels) / len(labels)
+            if labels else 0.0
+        )
+        net_accuracy = (
+            sum(1 for r in labels if float(r.get("net_signed_return_bps", 0.0)) > 0) / len(labels)
+            if labels else 0.0
+        )
         horizons[str(horizon)] = {
             "horizon_minutes": horizon,
             "label_count": len(labels),
+            "cost_bps": float(cost_bps),
+            "avg_net_signed_return_bps": avg_net_bps,
+            "net_accuracy": net_accuracy,
+            "null_baseline": _null_baseline(labels),
             "overall": _metric(labels),
             "calibration": _calibration_diagnostics(labels),
             "by_symbol": _group_metrics(labels, "symbol"),
@@ -486,6 +556,7 @@ def build_feature_ablation_report(
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
     max_match_gap_seconds: float = 90.0,
+    cost_bps: float = 3.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -495,6 +566,7 @@ def build_feature_ablation_report(
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
         max_match_gap_seconds=max_match_gap_seconds,
+        cost_bps=cost_bps,
     )
     rows = label_report["labels_by_horizon"].get(int(horizon_minutes), [])
     features = {
@@ -561,6 +633,7 @@ def build_confidence_control_report(
     readiness_min_populated_bins: int = 3,
     readiness_min_bin_labels: int = 30,
     max_match_gap_seconds: float = 90.0,
+    cost_bps: float = 3.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -571,6 +644,7 @@ def build_confidence_control_report(
         allowed_session_buckets=allowed_session_buckets,
         included_confidence_sources=included_confidence_sources,
         max_match_gap_seconds=max_match_gap_seconds,
+        cost_bps=cost_bps,
     )
     rows = label_report["labels_by_horizon"].get(max(1, int(horizon_minutes)), [])
     confidence_bin_metrics = _group_metrics(rows, "confidence_bin")

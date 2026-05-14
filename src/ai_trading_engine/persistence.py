@@ -6,7 +6,7 @@ import csv
 import io
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator, Protocol
 
@@ -155,6 +155,18 @@ class _SqlitePersistence:
 
                 CREATE INDEX IF NOT EXISTS idx_data_samples_ts ON data_samples(ts);
                 CREATE INDEX IF NOT EXISTS idx_data_samples_symbol ON data_samples(symbol);
+
+                CREATE TABLE IF NOT EXISTS trade_outcomes (
+                    order_key TEXT PRIMARY KEY,
+                    symbol TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL NOT NULL,
+                    pnl REAL NOT NULL,
+                    hold_minutes REAL NOT NULL,
+                    closed_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
                 """
             )
 
@@ -174,6 +186,7 @@ class _SqlitePersistence:
         quality_flags = dict(sample_quality.get("flags") or {})
         in_position = bool(cycle_meta.get("in_position", False))
         collect_only_forced = bool(quality_flags.get("collect_only_forced", False))
+        order_key = str(cycle_meta.get("order_key") or "")
         providers = dict(meta.get("providers") or {})
         thresholds = dict(meta.get("thresholds") or {})
         costs = dict(meta.get("costs") or {})
@@ -273,6 +286,7 @@ class _SqlitePersistence:
             "quality_missing_forecast": bool(quality_flags.get("missing_forecast", False)),
             "quality_collect_only_forced": collect_only_forced,
             "in_position": in_position,
+            "order_key": order_key,
             "llm_raw": cycle.llm_raw,
             "dashboard": cycle.dashboard,
         }
@@ -469,6 +483,129 @@ class _SqlitePersistence:
                     break
         return result
 
+    def freeze_hold_out_by_period(self, test_days: int = 14) -> dict[str, Any]:
+        """Mark samples from the most recent test_days calendar days as hold-out."""
+        with self._conn() as conn:
+            rows = conn.execute("SELECT id, payload_json FROM data_samples ORDER BY id DESC").fetchall()
+        if not rows:
+            return {"frozen": 0, "total": 0, "skipped": True, "reason": "no_samples"}
+        already_frozen = sum(1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False))
+        if already_frozen > 0:
+            return {"frozen": 0, "already_frozen": already_frozen, "total": len(rows), "skipped": True}
+        cutoff: datetime | None = None
+        for row in rows:
+            try:
+                p = json.loads(row["payload_json"])
+                ts_str = str(p.get("timestamp") or "")
+                if not ts_str:
+                    continue
+                dt = datetime.fromisoformat(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if cutoff is None or dt > cutoff:
+                    cutoff = dt
+            except Exception:
+                continue
+        if cutoff is None:
+            return {"frozen": 0, "total": len(rows), "skipped": True, "reason": "no_valid_timestamps"}
+        cutoff_start = cutoff - timedelta(days=max(1, int(test_days)))
+        frozen = 0
+        with self._conn() as conn:
+            for row in rows:
+                try:
+                    p = json.loads(row["payload_json"])
+                    ts_str = str(p.get("timestamp") or "")
+                    if not ts_str:
+                        continue
+                    dt = datetime.fromisoformat(ts_str)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt >= cutoff_start:
+                        p["hold_out"] = True
+                        conn.execute(
+                            "UPDATE data_samples SET payload_json = ? WHERE id = ?",
+                            (json.dumps(p, ensure_ascii=True), row["id"]),
+                        )
+                        frozen += 1
+                except Exception:
+                    continue
+        return {
+            "frozen": frozen,
+            "already_frozen": 0,
+            "total": len(rows),
+            "test_days": int(test_days),
+            "cutoff_start": cutoff_start.isoformat() if cutoff_start else None,
+            "skipped": False,
+        }
+
+    def save_trade_outcome(
+        self,
+        order_key: str,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        exit_price: float,
+        pnl: float,
+        hold_minutes: float,
+        closed_at: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        payload = {
+            "order_key": order_key,
+            "symbol": symbol,
+            "direction": direction,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "pnl": pnl,
+            "hold_minutes": hold_minutes,
+            "closed_at": closed_at,
+        }
+        if extra:
+            payload.update(extra)
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO trade_outcomes(order_key, symbol, direction, entry_price, exit_price, pnl, hold_minutes, closed_at, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(order_key) DO UPDATE SET
+                  exit_price=excluded.exit_price,
+                  pnl=excluded.pnl,
+                  hold_minutes=excluded.hold_minutes,
+                  closed_at=excluded.closed_at,
+                  payload_json=excluded.payload_json
+                """,
+                (
+                    str(order_key), str(symbol), str(direction),
+                    float(entry_price), float(exit_price), float(pnl),
+                    float(hold_minutes), str(closed_at),
+                    json.dumps(payload, ensure_ascii=True),
+                ),
+            )
+
+    def list_trade_outcomes(self, limit: int = 10000) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT payload_json FROM trade_outcomes ORDER BY closed_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [json.loads(row["payload_json"]) for row in rows]
+
+    def list_data_samples_with_outcomes(self, limit: int = 10000) -> list[dict[str, Any]]:
+        samples = self.list_data_samples(limit)
+        outcomes = {o["order_key"]: o for o in self.list_trade_outcomes(limit)}
+        for s in samples:
+            ok = str(s.get("order_key") or "")
+            if ok and ok in outcomes:
+                o = outcomes[ok]
+                s["realized_pnl"] = float(o.get("pnl", 0.0))
+                s["realized_exit_price"] = float(o.get("exit_price", 0.0))
+                s["realized_hold_minutes"] = float(o.get("hold_minutes", 0.0))
+                s["realized_closed_at"] = str(o.get("closed_at") or "")
+                s["has_outcome"] = True
+            else:
+                s["has_outcome"] = False
+        return samples
+
     def export_data_samples_csv(self, limit: int = 10000) -> str:
         rows = self.list_data_samples(limit)
         fieldnames = [
@@ -552,6 +689,7 @@ class _SqlitePersistence:
             "quality_missing_forecast",
             "quality_collect_only_forced",
             "in_position",
+            "order_key",
         ]
         out = io.StringIO()
         writer = csv.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")
@@ -684,6 +822,21 @@ class _PostgresPersistence:
                 )
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_data_samples_ts ON data_samples(ts);")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_data_samples_symbol ON data_samples(symbol);")
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS trade_outcomes (
+                        order_key TEXT PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        direction TEXT NOT NULL,
+                        entry_price DOUBLE PRECISION NOT NULL,
+                        exit_price DOUBLE PRECISION NOT NULL,
+                        pnl DOUBLE PRECISION NOT NULL,
+                        hold_minutes DOUBLE PRECISION NOT NULL,
+                        closed_at TEXT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    );
+                    """
+                )
 
     def save_runtime_config(self, cfg: RuntimeConfig) -> None:
         now = datetime.now(tz=timezone.utc).isoformat()
@@ -857,6 +1010,7 @@ class _PostgresPersistence:
             "quality_missing_forecast",
             "quality_collect_only_forced",
             "in_position",
+            "order_key",
         ]
         out = io.StringIO()
         writer = csv.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")
@@ -1015,6 +1169,134 @@ class _PostgresPersistence:
                 if len(result) >= int(limit):
                     break
         return result
+
+    def freeze_hold_out_by_period(self, test_days: int = 14) -> dict[str, Any]:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, payload_json FROM data_samples ORDER BY id DESC")
+                rows = cur.fetchall()
+        if not rows:
+            return {"frozen": 0, "total": 0, "skipped": True, "reason": "no_samples"}
+        already_frozen = sum(1 for r in rows if json.loads(r["payload_json"]).get("hold_out", False))
+        if already_frozen > 0:
+            return {"frozen": 0, "already_frozen": already_frozen, "total": len(rows), "skipped": True}
+        cutoff: datetime | None = None
+        for row in rows:
+            try:
+                p = json.loads(row["payload_json"])
+                ts_str = str(p.get("timestamp") or "")
+                if not ts_str:
+                    continue
+                dt = datetime.fromisoformat(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if cutoff is None or dt > cutoff:
+                    cutoff = dt
+            except Exception:
+                continue
+        if cutoff is None:
+            return {"frozen": 0, "total": len(rows), "skipped": True, "reason": "no_valid_timestamps"}
+        cutoff_start = cutoff - timedelta(days=max(1, int(test_days)))
+        frozen = 0
+        with self._conn() as conn:
+            for row in rows:
+                try:
+                    p = json.loads(row["payload_json"])
+                    ts_str = str(p.get("timestamp") or "")
+                    if not ts_str:
+                        continue
+                    dt = datetime.fromisoformat(ts_str)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt >= cutoff_start:
+                        p["hold_out"] = True
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "UPDATE data_samples SET payload_json = %s WHERE id = %s",
+                                (json.dumps(p, ensure_ascii=True), row["id"]),
+                            )
+                        frozen += 1
+                except Exception:
+                    continue
+        return {
+            "frozen": frozen,
+            "already_frozen": 0,
+            "total": len(rows),
+            "test_days": int(test_days),
+            "cutoff_start": cutoff_start.isoformat() if cutoff_start else None,
+            "skipped": False,
+        }
+
+    def save_trade_outcome(
+        self,
+        order_key: str,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        exit_price: float,
+        pnl: float,
+        hold_minutes: float,
+        closed_at: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        payload = {
+            "order_key": order_key,
+            "symbol": symbol,
+            "direction": direction,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "pnl": pnl,
+            "hold_minutes": hold_minutes,
+            "closed_at": closed_at,
+        }
+        if extra:
+            payload.update(extra)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO trade_outcomes(order_key, symbol, direction, entry_price, exit_price, pnl, hold_minutes, closed_at, payload_json)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT(order_key) DO UPDATE SET
+                      exit_price=EXCLUDED.exit_price,
+                      pnl=EXCLUDED.pnl,
+                      hold_minutes=EXCLUDED.hold_minutes,
+                      closed_at=EXCLUDED.closed_at,
+                      payload_json=EXCLUDED.payload_json
+                    """,
+                    (
+                        str(order_key), str(symbol), str(direction),
+                        float(entry_price), float(exit_price), float(pnl),
+                        float(hold_minutes), str(closed_at),
+                        json.dumps(payload, ensure_ascii=True),
+                    ),
+                )
+
+    def list_trade_outcomes(self, limit: int = 10000) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT payload_json FROM trade_outcomes ORDER BY closed_at DESC LIMIT %s",
+                    (limit,),
+                )
+                rows = cur.fetchall()
+        return [json.loads(row["payload_json"]) for row in rows]
+
+    def list_data_samples_with_outcomes(self, limit: int = 10000) -> list[dict[str, Any]]:
+        samples = self.list_data_samples(limit)
+        outcomes = {o["order_key"]: o for o in self.list_trade_outcomes(limit)}
+        for s in samples:
+            ok = str(s.get("order_key") or "")
+            if ok and ok in outcomes:
+                o = outcomes[ok]
+                s["realized_pnl"] = float(o.get("pnl", 0.0))
+                s["realized_exit_price"] = float(o.get("exit_price", 0.0))
+                s["realized_hold_minutes"] = float(o.get("hold_minutes", 0.0))
+                s["realized_closed_at"] = str(o.get("closed_at") or "")
+                s["has_outcome"] = True
+            else:
+                s["has_outcome"] = False
+        return samples
 
 
 class Persistence:
