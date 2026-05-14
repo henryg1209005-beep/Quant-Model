@@ -172,6 +172,8 @@ class _SqlitePersistence:
         structure_features = dict(features.get("structure") or {})
         sample_quality = dict(cycle_meta.get("sample_quality") or {})
         quality_flags = dict(sample_quality.get("flags") or {})
+        in_position = bool(cycle_meta.get("in_position", False))
+        collect_only_forced = bool(quality_flags.get("collect_only_forced", False))
         providers = dict(meta.get("providers") or {})
         thresholds = dict(meta.get("thresholds") or {})
         costs = dict(meta.get("costs") or {})
@@ -269,6 +271,8 @@ class _SqlitePersistence:
             "quality_economic_calendar_error": bool(quality_flags.get("economic_calendar_error", False)),
             "quality_finnhub_context_error": bool(quality_flags.get("finnhub_context_error", False)),
             "quality_missing_forecast": bool(quality_flags.get("missing_forecast", False)),
+            "quality_collect_only_forced": collect_only_forced,
+            "in_position": in_position,
             "llm_raw": cycle.llm_raw,
             "dashboard": cycle.dashboard,
         }
@@ -546,6 +550,8 @@ class _SqlitePersistence:
             "quality_economic_calendar_error",
             "quality_finnhub_context_error",
             "quality_missing_forecast",
+            "quality_collect_only_forced",
+            "in_position",
         ]
         out = io.StringIO()
         writer = csv.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")
@@ -849,6 +855,8 @@ class _PostgresPersistence:
             "quality_economic_calendar_error",
             "quality_finnhub_context_error",
             "quality_missing_forecast",
+            "quality_collect_only_forced",
+            "in_position",
         ]
         out = io.StringIO()
         writer = csv.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")

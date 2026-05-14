@@ -793,6 +793,7 @@ class TradingEngine:
         quote = self.data_adapter.get_latest_quote(self.settings.symbol)
 
         closed = self.execution.process_open_position(quote, self.account)
+        in_position_before_cycle = self.account.open_position is not None
         closed_note = f"Closed position PnL={closed.pnl:.2f}" if closed else "No bracket exit this cycle"
         if closed:
             closed_regime, closed_conf = self._extract_regime_and_confidence(closed.thesis)
@@ -1165,6 +1166,7 @@ class TradingEngine:
             "economic_calendar_error": economic_calendar.event_risk == "error",
             "finnhub_context_error": "error=" in (finnhub_context.notes or ""),
             "missing_forecast": decision.forecast_direction not in {"LONG", "SHORT"},
+            "collect_only_forced": bool(collect_only),
         }
         hard_fail_flags = {
             "economic_calendar_error": bool(quality_flags["economic_calendar_error"]),
@@ -1219,5 +1221,6 @@ class TradingEngine:
                     "session_meta": session_meta,
                 },
                 "llm_routing": llm_routing,
+                "in_position": bool(in_position_before_cycle),
             },
         )

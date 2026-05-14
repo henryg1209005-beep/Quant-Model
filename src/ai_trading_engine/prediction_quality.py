@@ -289,6 +289,7 @@ def build_prediction_labels(
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
     included_confidence_sources: tuple[str, ...] | None = None,
+    max_match_gap_seconds: float = 90.0,
 ) -> dict[str, Any]:
     filtered_samples = _filter_samples_by_quality(samples, quality_mode)
     by_symbol = _points_by_symbol(filtered_samples)
@@ -296,6 +297,7 @@ def build_prediction_labels(
     eligible = 0
     skipped_no_quote = 0
     skipped_no_prediction = 0
+    skipped_gap: dict[int, int] = {int(h): 0 for h in horizons_minutes}
     allowed_sources = (
         {_normalize_confidence_source(v) for v in included_confidence_sources}
         if included_confidence_sources
@@ -330,6 +332,11 @@ def build_prediction_labels(
                 if idx >= len(points):
                     continue
                 future = points[idx]
+                if max_match_gap_seconds is not None:
+                    gap = abs((future.timestamp - target).total_seconds())
+                    if gap > float(max_match_gap_seconds):
+                        skipped_gap[int(horizon)] = skipped_gap.get(int(horizon), 0) + 1
+                        continue
                 forward_bps = ((future.price / point.price) - 1.0) * 10000.0
                 signed_bps = forward_bps * side
                 feature_patterns = dict(sample.get("feature_patterns") or {})
@@ -387,6 +394,8 @@ def build_prediction_labels(
         "eligible_trade_predictions": eligible,
         "skipped_no_quote": skipped_no_quote,
         "skipped_no_prediction": skipped_no_prediction,
+        "skipped_gap_by_horizon": skipped_gap,
+        "max_match_gap_seconds": float(max_match_gap_seconds) if max_match_gap_seconds is not None else None,
         "min_confidence": float(min_confidence),
         "labels_by_horizon": labels_by_horizon,
     }
@@ -401,6 +410,7 @@ def build_prediction_quality_report(
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
     included_confidence_sources: tuple[str, ...] | None = None,
+    max_match_gap_seconds: float = 90.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -410,6 +420,7 @@ def build_prediction_quality_report(
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
         included_confidence_sources=included_confidence_sources,
+        max_match_gap_seconds=max_match_gap_seconds,
     )
     labels_by_horizon = label_report["labels_by_horizon"]
     horizons: dict[str, Any] = {}
@@ -442,6 +453,8 @@ def build_prediction_quality_report(
         "eligible_trade_predictions": label_report["eligible_trade_predictions"],
         "skipped_no_quote": label_report["skipped_no_quote"],
         "skipped_no_prediction": label_report["skipped_no_prediction"],
+        "skipped_gap_by_horizon": label_report["skipped_gap_by_horizon"],
+        "max_match_gap_seconds": label_report["max_match_gap_seconds"],
         "min_confidence": label_report["min_confidence"],
         "included_confidence_sources": list(included_confidence_sources or []),
         "horizons": horizons,
@@ -472,6 +485,7 @@ def build_feature_ablation_report(
     quality_mode: str = "all",
     max_quote_age_seconds: float | None = None,
     allowed_session_buckets: tuple[str, ...] | None = None,
+    max_match_gap_seconds: float = 90.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -480,6 +494,7 @@ def build_feature_ablation_report(
         quality_mode=quality_mode,
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
+        max_match_gap_seconds=max_match_gap_seconds,
     )
     rows = label_report["labels_by_horizon"].get(int(horizon_minutes), [])
     features = {
@@ -545,6 +560,7 @@ def build_confidence_control_report(
     included_confidence_sources: tuple[str, ...] = ("model", "cached"),
     readiness_min_populated_bins: int = 3,
     readiness_min_bin_labels: int = 30,
+    max_match_gap_seconds: float = 90.0,
 ) -> dict[str, Any]:
     label_report = build_prediction_labels(
         samples,
@@ -554,6 +570,7 @@ def build_confidence_control_report(
         max_quote_age_seconds=max_quote_age_seconds,
         allowed_session_buckets=allowed_session_buckets,
         included_confidence_sources=included_confidence_sources,
+        max_match_gap_seconds=max_match_gap_seconds,
     )
     rows = label_report["labels_by_horizon"].get(max(1, int(horizon_minutes)), [])
     confidence_bin_metrics = _group_metrics(rows, "confidence_bin")
