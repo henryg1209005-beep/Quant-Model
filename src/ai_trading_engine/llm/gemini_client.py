@@ -89,9 +89,15 @@ class GeminiLlmClient(LlmClient):
                     data = json.loads(resp.read().decode("utf-8"))
                 break
             except HTTPError as exc:
-                last_error = exc
+                try:
+                    body = exc.read().decode("utf-8", errors="replace")
+                except Exception:
+                    body = ""
+                last_error = RuntimeError(
+                    f"Gemini HTTP {exc.code}: {body[:400]}"
+                )
                 if exc.code not in {429, 500, 502, 503, 504} or attempt == max_attempts - 1:
-                    raise
+                    raise last_error
                 time.sleep(0.5 * (attempt + 1))
             except Exception as exc:
                 last_error = exc
