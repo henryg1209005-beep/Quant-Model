@@ -949,6 +949,56 @@ class _PostgresPersistence:
                 rows = cur.fetchall()
         return [json.loads(row["payload_json"]) for row in rows]
 
+    def backfill_session_buckets(self, tz_name: str = "America/New_York") -> dict[str, Any]:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+
+        def _compute_bucket(ts_str: str) -> str:
+            try:
+                dt = datetime.fromisoformat(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                et = dt.astimezone(tz)
+                m = et.hour * 60 + et.minute
+                if m < (9 * 60 + 30) or m > 16 * 60:
+                    return "outside"
+                if m <= (10 * 60 + 30):
+                    return "open"
+                if m >= 15 * 60:
+                    return "close"
+                return "midday"
+            except Exception:
+                return "unknown"
+
+        updated = 0
+        skipped = 0
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, payload_json FROM data_samples")
+                rows = cur.fetchall()
+            for row in rows:
+                try:
+                    payload = json.loads(row["payload_json"])
+                except Exception:
+                    skipped += 1
+                    continue
+                current = str(payload.get("session_bucket") or "")
+                if current not in ("", "session_filter_disabled"):
+                    skipped += 1
+                    continue
+                ts_str = str(payload.get("timestamp") or "")
+                if not ts_str:
+                    skipped += 1
+                    continue
+                payload["session_bucket"] = _compute_bucket(ts_str)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE data_samples SET payload_json = %s WHERE id = %s",
+                        (json.dumps(payload, ensure_ascii=True), row["id"]),
+                    )
+                updated += 1
+        return {"updated": updated, "skipped": skipped, "total": updated + skipped}
+
     def export_data_samples_csv(self, limit: int = 10000) -> str:
         rows = self.list_data_samples(limit)
         fieldnames = [
